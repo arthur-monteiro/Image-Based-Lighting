@@ -1,9 +1,16 @@
+#include "System.h"
+
 #include <iostream>
 
 int main()
 {
+	System s;
+
 	try
 	{
+		s.initialize();
+		s.mainLoop();
+		s.cleanup();
 	}
 	catch (const std::runtime_error& e)
 	{
