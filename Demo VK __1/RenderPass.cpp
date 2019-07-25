@@ -141,12 +141,28 @@ int RenderPass::addPointLight(Vulkan * vk, glm::vec3 position, glm::vec3 color)
 	m_uboLights.pointLightsColors[m_uboLights.nbPointLights] = glm::vec4(color, 1.0f);
 	m_uboLights.nbPointLights++;
 
+	m_uboLights.camPos = glm::vec4(0.0f, 2.0f, -2.0f, 1.0f);
+
 	void* data;
 	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 		memcpy(data, &m_uboLights, sizeof(m_uboLights));
 	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
 
 	return m_uboLights.nbPointLights - 1;
+}
+
+int RenderPass::addDirLight(Vulkan* vk, glm::vec3 direction, glm::vec3 color)
+{
+	m_uboLights.dirLightsDirections[m_uboLights.nbDirLights] = glm::vec4(direction, 1.0f);
+	m_uboLights.dirLightsColors[m_uboLights.nbDirLights] = glm::vec4(color, 1.0f);
+	m_uboLights.nbDirLights++;
+
+	void* data;
+	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
+	memcpy(data, &m_uboLights, sizeof(m_uboLights));
+	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
+
+	return m_uboLights.nbDirLights - 1;
 }
 
 void RenderPass::recordDraw(Vulkan * vk)
@@ -161,7 +177,7 @@ void RenderPass::updateUniformBuffer(Vulkan * vk)
 	{
 		UniformBufferObjectMatrices ubo = {};
 		ubo.model = m_meshes[i]->GetModelMatrix();
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.view = glm::lookAt(glm::vec3(0.0f, 2.0f, -2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.proj = glm::perspective(glm::radians(45.0f), vk->GetSwapChainExtend().width / (float)vk->GetSwapChainExtend().height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 

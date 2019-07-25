@@ -59,6 +59,7 @@ public:
 	int addMesh(Vulkan * vk, std::vector<Mesh*> mesh, std::string vertPath, std::string fragPath, int nbUbo, int nbTexture);
 	int addText(Vulkan * vk, Text * text);
 	int addPointLight(Vulkan * vk, glm::vec3 position, glm::vec3 color);
+	int addDirLight(Vulkan* vk, glm::vec3 direction, glm::vec3 color);
 
 	void recordDraw(Vulkan * vk);
 
@@ -108,5 +109,7 @@ private:
 	VkCommandBuffer m_commandBuffer;
 	VkSemaphore m_renderCompleteSemaphore;
 	VkCommandPool m_commandPool;
+
+	VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 };
 

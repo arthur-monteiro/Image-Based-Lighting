@@ -8,7 +8,7 @@
 class Mesh
 {
 public:
-	void loadObj(Vulkan * vk, std::string path);
+	void loadObj(Vulkan * vk, std::string path, glm::vec3 forceNormal = glm::vec3(-1.0f));
 	void loadTexture(Vulkan * vk, std::vector<std::string> path);
 
 	void restoreTransformations() { m_modelMatrix = glm::mat4(1.0); }
@@ -42,6 +42,7 @@ private:
 	VkBuffer m_indexBuffer;
 	VkDeviceMemory m_indexBufferMemory;
 
+	uint32_t m_mipLevels;
 	std::vector<VkImage> m_textureImage;
 	std::vector<VkDeviceMemory> m_textureImageMemory;
 	std::vector<VkImageView> m_textureImageView;

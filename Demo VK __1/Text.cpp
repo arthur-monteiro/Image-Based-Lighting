@@ -51,19 +51,19 @@ void Text::initialize(Vulkan * vk, int ySize, std::string path)
 
 		delete(pixels);
 
-		vk->createImage(texWidth, texHeight, VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL, 
+		vk->createImage(texWidth, texHeight, 1, VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL, 
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
 			character.image, character.imageMemory);
 
-		vk->transitionImageLayout(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		vk->transitionImageLayout(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
 			vk->copyBufferToImage(stagingBuffer, character.image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 		vk->transitionImageLayout(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
 
 		vkDestroyBuffer(vk->GetDevice(), stagingBuffer, nullptr);
 		vkFreeMemory(vk->GetDevice(), stagingBufferMemory, nullptr);
 
-		character.imageView = vk->createImageView(character.image, VK_FORMAT_R8_UNORM);
+		character.imageView = vk->createImageView(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
 		m_characters[c] = character;
 	}

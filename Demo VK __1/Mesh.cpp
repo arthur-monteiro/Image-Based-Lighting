@@ -6,7 +6,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-void Mesh::loadObj(Vulkan * vk, std::string path)
+void Mesh::loadObj(Vulkan * vk, std::string path, glm::vec3 forceNormal)
 {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
@@ -45,13 +45,18 @@ void Mesh::loadObj(Vulkan * vk, std::string path)
 				attrib.texcoords[2 * index.texcoord_index + 0],
 				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
 			};
-
-			vertex.normal =
+			
+			if (forceNormal == glm::vec3(-1.0f))
 			{
-				attrib.normals[3 * index.normal_index + 0],
-				attrib.normals[3 * index.normal_index + 1],
-				attrib.normals[3 * index.normal_index + 2]
-			};
+				vertex.normal =
+				{
+					attrib.normals[3 * index.normal_index + 0],
+					attrib.normals[3 * index.normal_index + 1],
+					attrib.normals[3 * index.normal_index + 2]
+				};
+			}
+			else
+				vertex.normal = forceNormal;
 
 			if (uniqueVertices.count(vertex) == 0)
 			{
@@ -169,7 +174,8 @@ void Mesh::createTextureImage(Vulkan * vk, std::string path)
 {
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
+	VkDeviceSize imageSize = static_cast<uint64_t>(texWidth * texHeight * 4);
+	m_mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 
 	if (!pixels)
 		throw std::runtime_error("Erreur : chargement de l'image " + path + " !");
@@ -179,8 +185,8 @@ void Mesh::createTextureImage(Vulkan * vk, std::string path)
 	vk->createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-	void* data;
-	vkMapMemory(vk->GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
+	uint8_t* data;
+	vkMapMemory(vk->GetDevice(), stagingBufferMemory, 0, imageSize, 0, (void**)&data);
 		memcpy(data, pixels, static_cast<size_t>(imageSize));
 	vkUnmapMemory(vk->GetDevice(), stagingBufferMemory);
 
@@ -189,12 +195,15 @@ void Mesh::createTextureImage(Vulkan * vk, std::string path)
 	m_textureImage.push_back(VkImage());
 	m_textureImageMemory.push_back(VkDeviceMemory());
 
-	vk->createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	vk->createImage(texWidth, texHeight, m_mipLevels, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, 
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		m_textureImage[m_textureImage.size() - 1], m_textureImageMemory[m_textureImage.size() - 1]);
 
-	vk->transitionImageLayout(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		vk->copyBufferToImage(stagingBuffer, m_textureImage[m_textureImage.size() - 1], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-	vk->transitionImageLayout(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	vk->transitionImageLayout(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, m_mipLevels);
+	vk->copyBufferToImage(stagingBuffer, m_textureImage[m_textureImage.size() - 1], static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+	//vk->transitionImageLayout(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_mipLevels);
+
+	vk->generateMipmaps(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, texWidth, texHeight, m_mipLevels);
 
 	vkDestroyBuffer(vk->GetDevice(), stagingBuffer, nullptr);
 	vkFreeMemory(vk->GetDevice(), stagingBufferMemory, nullptr);
@@ -202,7 +211,7 @@ void Mesh::createTextureImage(Vulkan * vk, std::string path)
 
 void Mesh::createTextureImageView(Vulkan * vk)
 {
-	m_textureImageView.push_back(vk->createImageView(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM));
+	m_textureImageView.push_back(vk->createImageView(m_textureImage[m_textureImage.size() - 1], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, m_mipLevels));
 }
 
 void Mesh::createTextureSampler(Vulkan * vk)
@@ -227,7 +236,7 @@ void Mesh::createTextureSampler(Vulkan * vk)
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.0f;
 	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 0.0f;
+	samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 
 	if (vkCreateSampler(vk->GetDevice(), &samplerInfo, nullptr, &m_textureSampler) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : texture sampler");
