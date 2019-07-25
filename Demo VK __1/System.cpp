@@ -6,6 +6,7 @@ System::System()
 
 System::~System()
 {
+	//cleanup();
 }
 
 void System::initialize()
@@ -73,6 +74,7 @@ bool System::mainLoop()
 void System::cleanup()
 {
 	m_vk.cleanup();
+	m_swapChainRenderPass.cleanup(&m_vk);
 }
 
 void System::create(bool recreate)
@@ -94,29 +96,29 @@ void System::createRessources()
 	for (int i(0); i < m_meshes.size(); ++i)
 		m_meshes[i] = std::unique_ptr<Mesh>(new Mesh);
 
-	/*m_meshes[0]->loadObj(&m_vk, "Models/lantern_obj.obj");
+	m_meshes[0]->loadObj(&m_vk, "Models/lantern_obj.obj");
 	m_meshes[0]->loadTexture(&m_vk, { "Textures/lantern_Base_Color.jpg", "Textures/lantern_Normal_OpenGL.jpg",  "Textures/lantern_Roughness.jpg",
-		"Textures/lantern_Metallic.jpg", "Textures/lantern_Mixed_AO.jpg" });*/
+		"Textures/lantern_Metallic.jpg", "Textures/lantern_Mixed_AO.jpg" });
 
-	m_meshes[0]->loadObj(&m_vk, "Models/cube.obj");
+	/*m_meshes[0]->loadObj(&m_vk, "Models/cube.obj");
 	m_meshes[0]->loadTexture(&m_vk, { "Textures/bamboo-wood-semigloss-albedo.png", "Textures/bamboo-wood-semigloss-normal.png",  "Textures/bamboo-wood-semigloss-roughness.png",
-		"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });
+		"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });*/
 }
 
 void System::createPasses(bool recreate)
 {
 	if(recreate) m_swapChainRenderPass.cleanup(&m_vk);
-	m_swapChainRenderPass.initialize(&m_vk);
+	m_swapChainRenderPass.initialize(&m_vk, false, { 0, 0 }, true, VK_SAMPLE_COUNT_8_BIT);
 
 	// on envoi le pointeur pour modifier la matrice model où on veut
 	m_swapChainRenderPass.addText(&m_vk, &m_text);
 
 	std::vector<std::pair<glm::vec3, glm::vec3>> pointLights;
-	pointLights.push_back({ glm::vec3(1.5f, 0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f) });
-	pointLights.push_back({ glm::vec3(-1.5f, 0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, 0.5f, -1.5f), glm::vec3(0.0f, 0.0f, 1.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(1.0f, 1.0f, 0.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, -0.5f, -1.5f), glm::vec3(0.0f, 1.0f, 1.0f) });
+	pointLights.push_back({ glm::vec3(1.5f, 0.5f, -0.5f), glm::vec3(1.0f) });
+	pointLights.push_back({ glm::vec3(-1.5f, 0.5f, -0.5f), glm::vec3(1.0f) });
+	pointLights.push_back({ glm::vec3(0.0f, 0.5f, -1.5f), glm::vec3(1.0f) });
+	pointLights.push_back({ glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(1.0f) });
+	pointLights.push_back({ glm::vec3(0.0f, -0.5f, -1.5f), glm::vec3(1.0f) });
 
 	std::vector<Mesh*> spheres;
 	for (int i(0); i < pointLights.size(); ++i)
@@ -138,8 +140,8 @@ void System::createPasses(bool recreate)
 	m_swapChainRenderPass.recordDraw(&m_vk);
 
 	m_meshes[0]->restoreTransformations();
-	/*m_meshes[0]->translate(glm::vec3(0.0f, -0.8f, 0.0f));
-	m_meshes[0]->scale(glm::vec3(0.02f));*/
+	m_meshes[0]->translate(glm::vec3(0.0f, -0.8f, 0.0f));
+	m_meshes[0]->scale(glm::vec3(0.02f));
 
 	m_swapChainRenderPass.updateUniformBuffer(&m_vk);
 }

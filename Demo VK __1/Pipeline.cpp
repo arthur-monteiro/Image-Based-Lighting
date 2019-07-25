@@ -1,7 +1,7 @@
 #include "Pipeline.h"
 
 void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout, VkRenderPass renderPass, 
-	std::string vertPath, std::string fragPath, bool alphaBlending, bool text)
+	std::string vertPath, std::string fragPath, bool alphaBlending, bool text, VkSampleCountFlagBits msaaSamples)
 {
 	auto vertShaderCode = readFile(vertPath);
 	auto fragShaderCode = readFile(fragPath);
@@ -77,7 +77,8 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 0.2f;
+	multisampling.rasterizationSamples = msaaSamples;
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 	if (!alphaBlending)

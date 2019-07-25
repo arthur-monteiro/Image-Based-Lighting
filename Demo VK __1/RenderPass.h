@@ -52,7 +52,7 @@ struct UniformBufferObjectLights
 class RenderPass
 {
 public:
-	void initialize(Vulkan* vk, bool createFrameBuffer = false, VkExtent2D extent = { 0, 0 }, bool present = true);
+	void initialize(Vulkan* vk, bool createFrameBuffer = false, VkExtent2D extent = { 0, 0 }, bool present = true, VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT);
 	UniformBufferObjectMatrices createUboMatrices(Vulkan * vk);
 	UniformBufferObjectLights createUboLights(Vulkan * vk);
 
@@ -69,7 +69,8 @@ public:
 	void cleanup(Vulkan * vk);
 
 private:
-	void createRenderPass(VkDevice device, VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	void createRenderPass(VkDevice device, VkImageLayout finalLayout);
+	void createColorResources(Vulkan * vk);
 	VkDescriptorSetLayout createDescriptorSetLayout(VkDevice device, int nbUbo, int nbTexture);
 	void createDescriptorPool(VkDevice device);
 	VkDescriptorSet createDescriptorSet(VkDevice device, VkDescriptorSetLayout decriptorSetLayout, std::vector<VkImageView> imageView,
@@ -111,5 +112,8 @@ private:
 	VkCommandPool m_commandPool;
 
 	VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkImage m_colorImage;
+	VkDeviceMemory m_colorImageMemory;
+	VkImageView m_colorImageView;
 };
 

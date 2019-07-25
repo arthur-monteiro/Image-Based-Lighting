@@ -73,7 +73,7 @@ class Vulkan
 {
 public:
 	void initialize(int width, int height, std::string appName, std::function<void(void*)> recreateCallback, void* instance, bool recreate);
-	void createSwapchainFramebuffers(VkRenderPass renderPass);
+	void createSwapchainFramebuffers(VkRenderPass renderPass, VkSampleCountFlagBits msaaSamples, VkImageView colorImageView);
 	void cleanup();
 
 public:
@@ -113,7 +113,7 @@ private:
 public :
 	VkCommandPool createCommandPool();
 
-	void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels);
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	VkCommandBuffer beginSingleTimeCommands();

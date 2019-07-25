@@ -1,26 +1,28 @@
 #include "RenderPass.h"
 
-void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D extent, bool present)
+void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D extent, bool present, VkSampleCountFlagBits msaaSamples)
 {
 	m_text = nullptr;
+	m_msaaSamples = msaaSamples;
 
 	m_format = vk->GetSwapChainImageFormat();
 	m_depthFormat = vk->findDepthFormat();
 
 	if(present)
-		createRenderPass(vk->GetDevice());
+		createRenderPass(vk->GetDevice(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	else
 		createRenderPass(vk->GetDevice(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	createDescriptorPool(vk->GetDevice());
 	
+	createColorResources(vk);
 	if (createFrameBuffer)
 		m_frameBuffer = vk->createFrameBuffer(extent, m_renderPass);
 	else
-		vk->createSwapchainFramebuffers(m_renderPass); 
+		vk->createSwapchainFramebuffers(m_renderPass, m_msaaSamples, m_colorImageView);
 
 	m_textDescriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), 0, 1);
 	m_textPipeline.initialize(vk, &m_textDescriptorSetLayout, m_renderPass, "Shaders/TextVert.spv", 
-		"Shaders/TextFrag.spv", true, true);
+		"Shaders/TextFrag.spv", true, true, m_msaaSamples);
 
 	m_uboLights = createUboLights(vk);
 
@@ -78,7 +80,7 @@ int RenderPass::addMesh(Vulkan * vk, std::vector<Mesh *> meshes, std::string ver
 	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), nbUbo, nbTexture);
 
 	Pipeline pipeline;
-	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath);
+	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, false, m_msaaSamples);
 	meshesPipeline.pipeline = pipeline.GetGraphicsPipeline();
 	meshesPipeline.pipelineLayout = pipeline.GetPipelineLayout();
 	
@@ -227,6 +229,10 @@ void RenderPass::drawCall(Vulkan * vk)
 
 void RenderPass::cleanup(Vulkan * vk)
 {
+	vkDestroyImageView(vk->GetDevice(), m_colorImageView, nullptr);
+	vkDestroyImage(vk->GetDevice(), m_colorImage, nullptr);
+	vkFreeMemory(vk->GetDevice(), m_colorImageMemory, nullptr);
+
 	for (int i(0); i < m_meshesPipeline.size(); ++i)
 		m_meshesPipeline[i].free(vk->GetDevice(), m_descriptorPool, true); // ne détruit pas les ressources
 
@@ -246,7 +252,7 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 {
 	VkAttachmentDescription colorAttachment = {};
 	colorAttachment.format = m_format;
-	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.samples = m_msaaSamples;
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -260,7 +266,7 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 
 	VkAttachmentDescription depthAttachment = {};
 	depthAttachment.format = m_depthFormat;
-	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	depthAttachment.samples = m_msaaSamples;
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -272,11 +278,26 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 	depthAttachmentRef.attachment = 1;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+	VkAttachmentDescription colorAttachmentResolve = {};
+	colorAttachmentResolve.format = m_format;
+	colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentResolveRef = {};
+	colorAttachmentResolveRef.attachment = 2;
+	colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
 	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentRef;
 	subpass.pDepthStencilAttachment = &depthAttachmentRef;
+	subpass.pResolveAttachments = &colorAttachmentResolveRef;
 
 	VkSubpassDependency dependency = {};
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -286,7 +307,7 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-	std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+	std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());;
@@ -298,6 +319,17 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 
 	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : render pass");
+}
+
+void RenderPass::createColorResources(Vulkan* vk)
+{
+	VkFormat colorFormat = m_format;
+
+	vk->createImage(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height, 1, m_msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, 
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_colorImage, m_colorImageMemory);
+	m_colorImageView = vk->createImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+	vk->transitionImageLayout(m_colorImage, colorFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 1);
 }
 
 VkDescriptorSetLayout RenderPass::createDescriptorSetLayout(VkDevice device, int nbUbo, int nbTexture)

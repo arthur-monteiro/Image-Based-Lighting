@@ -133,6 +133,7 @@ void Vulkan::createDevice()
 
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
+	deviceFeatures.sampleRateShading = VK_TRUE;
 
 	VkDeviceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -252,10 +253,10 @@ void Vulkan::cleanupSwapChain()
 
 	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
 }
-void Vulkan::createSwapchainFramebuffers(VkRenderPass renderPass)
+void Vulkan::createSwapchainFramebuffers(VkRenderPass renderPass, VkSampleCountFlagBits msaaSamples, VkImageView colorImageView)
 {
 	VkFormat depthFormat = findDepthFormat();
-	createImage(m_swapChainExtent.width, m_swapChainExtent.height, 1, depthFormat,
+	createImage(m_swapChainExtent.width, m_swapChainExtent.height, 1, msaaSamples, depthFormat,
 		VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
 	m_depthImageView = createImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
@@ -266,10 +267,11 @@ void Vulkan::createSwapchainFramebuffers(VkRenderPass renderPass)
 
 	for (size_t i = 0; i < m_swapChainImageViews.size(); i++)
 	{
-		std::array<VkImageView, 2> attachments =
+		std::array<VkImageView, 3> attachments =
 		{
+			colorImageView,
+			m_depthImageView,
 			m_swapChainImageViews[i],
-			m_depthImageView
 		};
 
 		VkFramebufferCreateInfo framebufferInfo = {};
@@ -286,7 +288,8 @@ void Vulkan::createSwapchainFramebuffers(VkRenderPass renderPass)
 	}
 }
 
-void Vulkan::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage & image, VkDeviceMemory & imageMemory)
+void Vulkan::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+	VkImage & image, VkDeviceMemory & imageMemory)
 {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -300,7 +303,7 @@ void Vulkan::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, Vk
 	imageInfo.tiling = tiling;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
 	imageInfo.usage = usage;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.samples = numSamples;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
@@ -377,6 +380,14 @@ void Vulkan::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 
 		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) 
+	{
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	}
 	else
 	{
@@ -756,14 +767,14 @@ FrameBuffer Vulkan::createFrameBuffer(VkExtent2D extent, VkRenderPass renderPass
 	FrameBuffer frameBuffer;
 
 	VkFormat depthFormat = findDepthFormat();
-	createImage(extent.width, extent.height, 1, depthFormat,
+	createImage(extent.width, extent.height, 1, VK_SAMPLE_COUNT_1_BIT, depthFormat,
 		VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, frameBuffer.depthImage, frameBuffer.depthImageMemory);
 	frameBuffer.depthImageView = createImageView(frameBuffer.depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
 	transitionImageLayout(frameBuffer.depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
 
-	createImage(extent.width, extent.height, 1, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, 
+	createImage(extent.width, extent.height, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		frameBuffer.image, frameBuffer.imageMemory);
 	frameBuffer.imageView = createImageView(frameBuffer.image, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);

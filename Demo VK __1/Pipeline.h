@@ -126,7 +126,7 @@ class Pipeline
 {
 public:
 	void initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout, VkRenderPass renderPass, std::string vertPath, 
-		std::string fragPath, bool alphaBlending = false, bool text = false);
+		std::string fragPath, bool alphaBlending = false, bool text = false, VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT);
 
 private:
 	static std::vector<char> readFile(const std::string& filename);
