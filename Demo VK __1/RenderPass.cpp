@@ -36,6 +36,8 @@ void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D exten
 	vk->SetRenderFinishedLastRenderPassSemaphore(m_renderCompleteSemaphore);
 
 	m_commandPool = vk->createCommandPool();
+
+	m_camera.initialize(glm::vec3(0.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 0.01f, 2.0f);
 }
 
 UniformBufferObjectMatrices RenderPass::createUboMatrices(Vulkan * vk)
@@ -143,8 +145,6 @@ int RenderPass::addPointLight(Vulkan * vk, glm::vec3 position, glm::vec3 color)
 	m_uboLights.pointLightsColors[m_uboLights.nbPointLights] = glm::vec4(color, 1.0f);
 	m_uboLights.nbPointLights++;
 
-	m_uboLights.camPos = glm::vec4(0.0f, 2.0f, -2.0f, 1.0f);
-
 	void* data;
 	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 		memcpy(data, &m_uboLights, sizeof(m_uboLights));
@@ -175,11 +175,13 @@ void RenderPass::recordDraw(Vulkan * vk)
 
 void RenderPass::updateUniformBuffer(Vulkan * vk)
 {
+	m_camera.update(vk->GetWindow());
+
 	for (int i = 0; i < m_meshes.size(); ++i)
 	{
 		UniformBufferObjectMatrices ubo = {};
 		ubo.model = m_meshes[i]->GetModelMatrix();
-		ubo.view = glm::lookAt(glm::vec3(0.0f, 2.0f, -2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.view = m_camera.getViewMatrix();
 		ubo.proj = glm::perspective(glm::radians(45.0f), vk->GetSwapChainExtend().width / (float)vk->GetSwapChainExtend().height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 
@@ -188,6 +190,13 @@ void RenderPass::updateUniformBuffer(Vulkan * vk)
 			memcpy(data, &ubo, sizeof(ubo));
 		vkUnmapMemory(vk->GetDevice(), m_ubosMatrices[i].uniformBufferMemory);
 	}
+
+	m_uboLights.camPos = glm::vec4(m_camera.getPosition(), 1.0f);
+
+	void* data;
+	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
+		memcpy(data, &m_uboLights, sizeof(m_uboLights));
+	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
 }
 
 void RenderPass::drawCall(Vulkan * vk)
@@ -484,7 +493,6 @@ VkDescriptorSet RenderPass::createDescriptorSet(VkDevice device, VkDescriptorSet
 		descriptorWrites.push_back(descriptorWrite);
 	}
 	
-
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 
 	return descriptorSet;

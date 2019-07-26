@@ -7,6 +7,7 @@
 #include "Pipeline.h"
 #include "Mesh.h"
 #include "Text.h"
+#include "Camera.h"
 
 struct UniformBufferObjectMatrices
 {
@@ -115,5 +116,7 @@ private:
 	VkImage m_colorImage;
 	VkDeviceMemory m_colorImageMemory;
 	VkImageView m_colorImageView;
+
+	Camera m_camera;
 };
 

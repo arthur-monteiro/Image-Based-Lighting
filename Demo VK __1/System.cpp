@@ -20,33 +20,7 @@ bool System::mainLoop()
 	{
 		glfwPollEvents();
 
-		int lastMouseState = glfwGetMouseButton(m_vk.GetWindow(), GLFW_MOUSE_BUTTON_LEFT);
-		if(lastMouseState == GLFW_PRESS)
-		{
-			if (!m_wasClickPressed)
-			{
-				glfwGetCursorPos(m_vk.GetWindow(), &m_oldMousePosX, &m_oldMousePosY);
-				m_wasClickPressed = true;
-			}
-			else
-			{
-				double currentMousePosX, currentMousePosY;
-				glfwGetCursorPos(m_vk.GetWindow(), &currentMousePosX, &currentMousePosY);
-
-				//m_meshes[0]->restoreTransformations();
-				m_meshes[0]->rotate((currentMousePosX - m_oldMousePosX) * glm::radians(2.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-				//m_meshes[0]->rotate((currentMousePosY - m_oldMousePosY) * glm::radians(2.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-				m_swapChainRenderPass.updateUniformBuffer(&m_vk);
-
-				m_oldMousePosX = currentMousePosX;
-				m_oldMousePosY = currentMousePosY;
-			}
-		}
-		else if (m_wasClickPressed && lastMouseState == GLFW_RELEASE)
-		{
-			m_wasClickPressed = false;
-		}
+		m_swapChainRenderPass.updateUniformBuffer(&m_vk);
 
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -96,13 +70,13 @@ void System::createRessources()
 	for (int i(0); i < m_meshes.size(); ++i)
 		m_meshes[i] = std::unique_ptr<Mesh>(new Mesh);
 
-	m_meshes[0]->loadObj(&m_vk, "Models/lantern_obj.obj");
+	/*m_meshes[0]->loadObj(&m_vk, "Models/lantern_obj.obj");
 	m_meshes[0]->loadTexture(&m_vk, { "Textures/lantern_Base_Color.jpg", "Textures/lantern_Normal_OpenGL.jpg",  "Textures/lantern_Roughness.jpg",
-		"Textures/lantern_Metallic.jpg", "Textures/lantern_Mixed_AO.jpg" });
+		"Textures/lantern_Metallic.jpg", "Textures/lantern_Mixed_AO.jpg" });*/
 
-	/*m_meshes[0]->loadObj(&m_vk, "Models/cube.obj");
+	m_meshes[0]->loadObj(&m_vk, "Models/cube.obj");
 	m_meshes[0]->loadTexture(&m_vk, { "Textures/bamboo-wood-semigloss-albedo.png", "Textures/bamboo-wood-semigloss-normal.png",  "Textures/bamboo-wood-semigloss-roughness.png",
-		"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });*/
+		"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });
 }
 
 void System::createPasses(bool recreate)
@@ -114,11 +88,11 @@ void System::createPasses(bool recreate)
 	m_swapChainRenderPass.addText(&m_vk, &m_text);
 
 	std::vector<std::pair<glm::vec3, glm::vec3>> pointLights;
-	pointLights.push_back({ glm::vec3(1.5f, 0.5f, -0.5f), glm::vec3(1.0f) });
-	pointLights.push_back({ glm::vec3(-1.5f, 0.5f, -0.5f), glm::vec3(1.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, 0.5f, -1.5f), glm::vec3(1.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(1.0f) });
-	pointLights.push_back({ glm::vec3(0.0f, -0.5f, -1.5f), glm::vec3(1.0f) });
+	pointLights.push_back({ glm::vec3(1.5f, 0.5f, -0.5f), glm::vec3(10.0f, 0.0f, 0.0f) });
+	pointLights.push_back({ glm::vec3(-1.5f, 0.5f, -0.5f), glm::vec3(0.0f, 10.0f, 0.0f) });
+	//pointLights.push_back({ glm::vec3(0.0f, 0.5f, -1.5f), glm::vec3(0.0f, 0.0f, 10.0f) });
+	//pointLights.push_back({ glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(1.0f) });
+	//pointLights.push_back({ glm::vec3(0.0f, -0.5f, -1.5f), glm::vec3(10.0f, 10.0f, 0.0f) });
 
 	std::vector<Mesh*> spheres;
 	for (int i(0); i < pointLights.size(); ++i)
@@ -135,13 +109,13 @@ void System::createPasses(bool recreate)
 	}
 
 	//m_meshes[0].get()->SetImageView(0, m_offScreenRenderPass.GetFrameBuffer().imageView);
-	m_swapChainRenderPass.addMesh(&m_vk, { m_meshes[0].get() }, "Shaders/vertPBR.spv", "Shaders/fragPBR.spv", 1, 5);
-	m_swapChainRenderPass.addMesh(&m_vk, spheres, "Shaders/vert.spv", "Shaders/frag.spv", 1, 0);
+	m_swapChainRenderPass.addMesh(&m_vk, { m_meshes[0].get() }, "Shaders/vert.spv", "Shaders/frag.spv", 1, 5);
+	m_swapChainRenderPass.addMesh(&m_vk, spheres, "Shaders/vertSphere.spv", "Shaders/fragSphere.spv", 1, 0);
 	m_swapChainRenderPass.recordDraw(&m_vk);
 
 	m_meshes[0]->restoreTransformations();
-	m_meshes[0]->translate(glm::vec3(0.0f, -0.8f, 0.0f));
-	m_meshes[0]->scale(glm::vec3(0.02f));
+	//m_meshes[0]->translate(glm::vec3(0.0f, -0.8f, 0.0f));
+	//m_meshes[0]->scale(glm::vec3(0.02f));
 
 	m_swapChainRenderPass.updateUniformBuffer(&m_vk);
 }
