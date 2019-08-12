@@ -22,9 +22,9 @@ bool System::mainLoop()
 
 		m_swapChainRenderPass.updateUniformBuffer(&m_vk);
 
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		static auto startTime = std::chrono::steady_clock::now();
 
-		auto currentTime = std::chrono::high_resolution_clock::now();
+		auto currentTime = std::chrono::steady_clock::now();
 		m_fpsCount++;
 		if (std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_startTimeFPSCounter).count() > 1000.0f)
 		{
@@ -84,7 +84,7 @@ void System::createPasses(bool recreate)
 	if(recreate) m_swapChainRenderPass.cleanup(&m_vk);
 	m_swapChainRenderPass.initialize(&m_vk, false, { 0, 0 }, true, VK_SAMPLE_COUNT_8_BIT);
 
-	// on envoi le pointeur pour modifier la matrice model où on veut
+	// on envoi le pointeur pour modifier la matrice model oï¿½ on veut
 	m_swapChainRenderPass.addText(&m_vk, &m_text);
 
 	std::vector<std::pair<glm::vec3, glm::vec3>> pointLights;

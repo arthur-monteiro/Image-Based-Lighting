@@ -19,7 +19,7 @@ void Camera::update(GLFWwindow* window)
 		return;
 	}
 
-	auto currentTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::steady_clock::now();
 	long long millisecondOffset = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - m_startTime).count();
 	float secondOffset = millisecondOffset / 1000.0;
 	m_startTime = currentTime;

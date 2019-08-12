@@ -1,0 +1,120 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Camera.h
+glm/glm.hpp
+-
+glm/gtc/matrix_transform.hpp
+-
+glm/gtx/hash.hpp
+-
+GLFW/glfw3.h
+-
+chrono
+-
+iostream
+-
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Mesh.h
+unordered_map
+-
+Vulkan.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+Pipeline.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Pipeline.h
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Pipeline.h
+iostream
+-
+fstream
+-
+array
+-
+glm/glm.hpp
+-
+glm/gtc/matrix_transform.hpp
+-
+glm/gtx/hash.hpp
+-
+Vulkan.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/RenderPass.h
+array
+-
+chrono
+-
+Vulkan.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+Pipeline.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Pipeline.h
+Mesh.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Mesh.h
+Text.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Text.h
+Camera.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Camera.h
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/System.h
+GLFW/glfw3.h
+-
+string
+-
+chrono
+-
+memory
+-
+Vulkan.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+RenderPass.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/RenderPass.h
+Mesh.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Mesh.h
+Text.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Text.h
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Text.h
+ft2build.h
+-
+map
+-
+Vulkan.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+Pipeline.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Pipeline.h
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/Vulkan.h
+GLFW/glfw3.h
+-
+iostream
+-
+vector
+-
+set
+-
+algorithm
+-
+array
+-
+functional
+-
+cstring
+-
+
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/main.cpp
+System.h
+/home/arthur/CLionProjects/Demo VK__1/Demo-VK/Demo VK __1/System.h
+iostream
+-
+
+/usr/include/freetype2/freetype/config/ftheader.h
+
+/usr/include/freetype2/ft2build.h
+freetype/config/ftheader.h
+-
+

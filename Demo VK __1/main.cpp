@@ -19,6 +19,8 @@ int main()
 		return EXIT_FAILURE;
 	}
 
+#ifdef _WIN32
 	system("PAUSE");
+#endif
 	return EXIT_SUCCESS;
 }

@@ -37,7 +37,7 @@ private:
 
 	int m_fpsCounterTextID;
 	int m_fpsCount;
-	std::chrono::steady_clock::time_point m_startTimeFPSCounter = std::chrono::high_resolution_clock::now();
+	std::chrono::steady_clock::time_point m_startTimeFPSCounter = std::chrono::steady_clock::now();;
 
 	double m_oldMousePosX = 0;
 	double m_oldMousePosY = 0;

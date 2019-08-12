@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <cstring>
 
 struct QueueFamilyIndices
 {
