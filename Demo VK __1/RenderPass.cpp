@@ -20,11 +20,9 @@ void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D exten
 	else
 		vk->createSwapchainFramebuffers(m_renderPass, m_msaaSamples, m_colorImageView);
 
-	m_textDescriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), 0, 1);
+	m_textDescriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), std::vector<UboBase*>(), 1);
 	m_textPipeline.initialize(vk, &m_textDescriptorSetLayout, m_renderPass, "Shaders/TextVert.spv", 
-		"Shaders/TextFrag.spv", true, true, m_msaaSamples);
-
-	m_uboLights = createUboLights(vk);
+		"Shaders/TextFrag.spv", true, m_msaaSamples, { TextVertex::getBindingDescription() }, TextVertex::getAttributeDescriptions());
 
 	m_useSwapChain = !createFrameBuffer;
 	VkSemaphoreCreateInfo semaphoreInfo = {};
@@ -36,41 +34,9 @@ void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D exten
 	vk->SetRenderFinishedLastRenderPassSemaphore(m_renderCompleteSemaphore);
 
 	m_commandPool = vk->createCommandPool();
-
-	m_camera.initialize(glm::vec3(0.0f, 2.0f, -2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 0.01f, 2.0f);
 }
 
-UniformBufferObjectMatrices RenderPass::createUboMatrices(Vulkan * vk)
-{
-	VkDeviceSize bufferSize = sizeof(UniformBufferObjectMatrices);
-	VkBuffer uniformBuffer;
-	VkDeviceMemory uniformBufferMemory;
-	vk->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
-
-	UniformBufferObjectMatrices ubo;
-	ubo.uniformBuffer = uniformBuffer;
-	ubo.uniformBufferMemory = uniformBufferMemory;
-	return ubo;
-}
-
-UniformBufferObjectLights RenderPass::createUboLights(Vulkan * vk)
-{
-	VkDeviceSize bufferSize = sizeof(UniformBufferObjectLights);
-	VkBuffer uniformBuffer;
-	VkDeviceMemory uniformBufferMemory;
-	vk->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, 
-		uniformBufferMemory);
-
-	UniformBufferObjectLights ubo;
-	ubo.uniformBuffer = uniformBuffer;
-	ubo.uniformBufferMemory = uniformBufferMemory;
-	return ubo;
-}
-
-int RenderPass::addMesh(Vulkan * vk, std::vector<Mesh *> meshes, std::string vertPath, std::string fragPath, 
-	int nbUbo, int nbTexture)
+int RenderPass::addMesh(Vulkan * vk, std::vector<MeshRender> meshes, std::string vertPath, std::string fragPath, int nbTexture)
 {
 	/* Ici tous les meshes sont rendus avec les mêmes shaders */
 	for (int i(0); i < meshes.size(); ++i)
@@ -79,32 +45,71 @@ int RenderPass::addMesh(Vulkan * vk, std::vector<Mesh *> meshes, std::string ver
 	}
 	MeshPipeline meshesPipeline;
 
-	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), nbUbo, nbTexture);
+	// Tous les meshes doivent avoir la même définition d'ubo
+	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), meshes[0].ubos, nbTexture);
 
 	Pipeline pipeline;
-	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, false, m_msaaSamples);
+	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, m_msaaSamples, { Vertex::getBindingDescription(0) }, Vertex::getAttributeDescriptions(0));
 	meshesPipeline.pipeline = pipeline.GetGraphicsPipeline();
 	meshesPipeline.pipelineLayout = pipeline.GetPipelineLayout();
 	
 	for (int i(0); i < meshes.size(); ++i)
 	{
-		m_ubosMatrices.push_back(createUboMatrices(vk));
-
-		meshesPipeline.vertexBuffer.push_back(meshes[i]->GetVertexBuffer());
-		meshesPipeline.indexBuffer.push_back(meshes[i]->GetIndexBuffer());
-		meshesPipeline.nbIndices.push_back(meshes[i]->GetNumIndices());
+		meshesPipeline.vertexBuffer.push_back(meshes[i].mesh->getVertexBuffer());
+		meshesPipeline.indexBuffer.push_back(meshes[i].mesh->getIndexBuffer());
+		meshesPipeline.nbIndices.push_back(meshes[i].mesh->getNumIndices());
 
 #ifndef NDEBUG
-		if (meshes[i]->GetImageView().size() != nbTexture)
+		if (meshes[i].mesh->getImageView().size() != nbTexture)
 			std::cout << "Attention : le nombre de texture utilisés n'est pas égale au nombre de textures du mesh" << std::endl;
 #endif // DEBUG
 
 		VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), descriptorSetLayout,
-			meshes[i]->GetImageView(), meshes[i]->GetSampler(), std::vector<VkBuffer>(1, m_ubosMatrices[m_ubosMatrices.size() -1].uniformBuffer), nbUbo, nbTexture);
+			meshes[i].mesh->getImageView(), meshes[i].mesh->getSampler(), meshes[i].ubos, nbTexture);
 		meshesPipeline.descriptorSet.push_back(descriptorSet);
 	}
 	
 	m_meshesPipeline.push_back(meshesPipeline);
+
+	return (int)m_meshesPipeline.size() - 1;
+}
+
+int RenderPass::addMeshInstanced(Vulkan* vk, std::vector<MeshRender> meshes, std::string vertPath, std::string fragPath, int nbTexture)
+{
+	MeshPipeline meshesPipelineInstanced;
+
+	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), meshes[0].ubos, nbTexture);
+
+	Pipeline pipeline;
+	std::vector<VkVertexInputAttributeDescription> attributeDescription = Vertex::getAttributeDescriptions(0);
+	std::vector<VkVertexInputAttributeDescription> instanceAttributeDescription = ModelInstance::getAttributeDescriptions(1, 4);
+	for (int i(0); i < instanceAttributeDescription.size(); ++i)
+	{
+		attributeDescription.push_back(instanceAttributeDescription[i]);
+	}
+	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, m_msaaSamples, { Vertex::getBindingDescription(0), ModelInstance::getBindingDescription(1) }, 
+		attributeDescription);
+	meshesPipelineInstanced.pipeline = pipeline.GetGraphicsPipeline();
+	meshesPipelineInstanced.pipelineLayout = pipeline.GetPipelineLayout();
+
+	for (int i(0); i < meshes.size(); ++i)
+	{
+		meshesPipelineInstanced.vertexBuffer.push_back(meshes[i].mesh->getVertexBuffer());
+		meshesPipelineInstanced.indexBuffer.push_back(meshes[i].mesh->getIndexBuffer());
+		meshesPipelineInstanced.nbIndices.push_back(meshes[i].mesh->getNumIndices());
+		meshesPipelineInstanced.instanceBuffer.push_back(meshes[i].instance->getInstanceBuffer());
+
+#ifndef NDEBUG
+		if (meshes[i].mesh->getImageView().size() != nbTexture)
+			std::cout << "Attention : le nombre de texture utilisés n'est pas égale au nombre de textures du mesh" << std::endl;
+#endif // DEBUG
+
+		VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), descriptorSetLayout,
+			meshes[i].mesh->getImageView(), meshes[i].mesh->getSampler(), meshes[i].ubos, nbTexture);
+		meshesPipelineInstanced.descriptorSet.push_back(descriptorSet);
+	}
+
+	m_meshesPipeline.push_back(meshesPipelineInstanced);
 
 	return (int)m_meshesPipeline.size() - 1;
 }
@@ -128,8 +133,7 @@ int RenderPass::addText(Vulkan * vk, Text * text)
 			meshPipeline.nbIndices.push_back(6);
 
 			VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), m_textDescriptorSetLayout,
-				std::vector<VkImageView>(1, text->GetImageView(i, j)), text->GetSampler(), std::vector<VkBuffer>(), 
-				0, 1, false);
+				std::vector<VkImageView>(1, text->GetImageView(i, j)), text->GetSampler(), std::vector<UboBase*>(), 1);
 			meshPipeline.descriptorSet.push_back(descriptorSet);
 		}
 
@@ -139,7 +143,7 @@ int RenderPass::addText(Vulkan * vk, Text * text)
 	return 0;
 }
 
-int RenderPass::addPointLight(Vulkan * vk, glm::vec3 position, glm::vec3 color)
+/*int RenderPass::addPointLight(Vulkan * vk, glm::vec3 position, glm::vec3 color)
 {
 	m_uboLights.pointLightsPositions[m_uboLights.nbPointLights] = glm::vec4(position, 1.0f);
 	m_uboLights.pointLightsColors[m_uboLights.nbPointLights] = glm::vec4(color, 1.0f);
@@ -165,7 +169,7 @@ int RenderPass::addDirLight(Vulkan* vk, glm::vec3 direction, glm::vec3 color)
 	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
 
 	return m_uboLights.nbDirLights - 1;
-}
+}*/
 
 void RenderPass::recordDraw(Vulkan * vk)
 {
@@ -173,15 +177,21 @@ void RenderPass::recordDraw(Vulkan * vk)
 	else fillCommandBuffer(vk);
 }
 
-void RenderPass::updateUniformBuffer(Vulkan * vk)
+/*void RenderPass::updateUniformBuffer(Vulkan * vk, int meshID)
 {
 	m_camera.update(vk->GetWindow());
 
 	for (int i = 0; i < m_meshes.size(); ++i)
 	{
+		if (meshID != -1)
+			i = meshID;
+
 		UniformBufferObjectMatrices ubo = {};
 		ubo.model = m_meshes[i]->GetModelMatrix();
-		ubo.view = m_camera.getViewMatrix();
+		if (meshID != -1)
+			ubo.view = glm::mat4(glm::mat3(m_camera.getViewMatrix()));
+		else
+			ubo.view = m_camera.getViewMatrix();
 		ubo.proj = glm::perspective(glm::radians(45.0f), vk->GetSwapChainExtend().width / (float)vk->GetSwapChainExtend().height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 
@@ -189,6 +199,9 @@ void RenderPass::updateUniformBuffer(Vulkan * vk)
 		vkMapMemory(vk->GetDevice(), m_ubosMatrices[i].uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
 		vkUnmapMemory(vk->GetDevice(), m_ubosMatrices[i].uniformBufferMemory);
+
+		if (meshID != -1)
+			break;
 	}
 
 	m_uboLights.camPos = glm::vec4(m_camera.getPosition(), 1.0f);
@@ -197,7 +210,7 @@ void RenderPass::updateUniformBuffer(Vulkan * vk)
 	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 		memcpy(data, &m_uboLights, sizeof(m_uboLights));
 	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
-}
+}*/
 
 void RenderPass::drawCall(Vulkan * vk)
 {
@@ -219,7 +232,7 @@ void RenderPass::drawCall(Vulkan * vk)
 
 			VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), m_textDescriptorSetLayout,
 				std::vector<VkImageView>(1, m_text->GetImageView(m_text->NeedUpdate(), j)), m_text->GetSampler(),
-				std::vector<VkBuffer>(), 0, 1, false);
+				std::vector<UboBase*>(), 1);
 			meshPipeline.descriptorSet.push_back(descriptorSet);
 		}
 
@@ -245,12 +258,7 @@ void RenderPass::cleanup(Vulkan * vk)
 	for (int i(0); i < m_meshesPipeline.size(); ++i)
 		m_meshesPipeline[i].free(vk->GetDevice(), m_descriptorPool, true); // ne détruit pas les ressources
 
-	for (int i(0); i < m_ubosMatrices.size(); ++i)
-		m_ubosMatrices[i].cleanup(vk->GetDevice());
-	m_ubosMatrices.clear();
 	m_meshes.clear();
-
-	m_uboLights.cleanup(vk->GetDevice());
 
 	m_meshesPipeline.clear();
 
@@ -335,29 +343,29 @@ void RenderPass::createColorResources(Vulkan* vk)
 	VkFormat colorFormat = m_format;
 
 	vk->createImage(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height, 1, m_msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, 
-		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_colorImage, m_colorImageMemory);
-	m_colorImageView = vk->createImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 0, m_colorImage, m_colorImageMemory);
+	m_colorImageView = vk->createImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
 
-	vk->transitionImageLayout(m_colorImage, colorFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 1);
+	vk->transitionImageLayout(m_colorImage, colorFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 1, 1);
 }
 
-VkDescriptorSetLayout RenderPass::createDescriptorSetLayout(VkDevice device, int nbUbo, int nbTexture)
+VkDescriptorSetLayout RenderPass::createDescriptorSetLayout(VkDevice device, std::vector<UboBase*> uniformBuffers, int nbTexture)
 {
 	int i = 0;
 	std::vector<VkDescriptorSetLayoutBinding> bindings;
-	for (; i < nbUbo; ++i)
+	for (; i < uniformBuffers.size(); ++i)
 	{
 		VkDescriptorSetLayoutBinding uboLayoutBinding = {};
 		uboLayoutBinding.binding = i;
 		uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		uboLayoutBinding.descriptorCount = 1;
-		uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		uboLayoutBinding.stageFlags = uniformBuffers[i]->getAccessibility();
 		uboLayoutBinding.pImmutableSamplers = nullptr;
 
 		bindings.push_back(uboLayoutBinding);
 	}
 
-	for (; i < nbTexture + nbUbo; ++i)
+	for (; i < nbTexture + uniformBuffers.size(); ++i)
 	{
 		VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
 		samplerLayoutBinding.binding = i;
@@ -368,16 +376,6 @@ VkDescriptorSetLayout RenderPass::createDescriptorSetLayout(VkDevice device, int
 
 		bindings.push_back(samplerLayoutBinding);
 	}
-
-	// UBO Lights
-	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-	uboLayoutBinding.binding = i;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
-
-	bindings.push_back(uboLayoutBinding);
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -411,7 +409,7 @@ void RenderPass::createDescriptorPool(VkDevice device)
 }
 
 VkDescriptorSet RenderPass::createDescriptorSet(VkDevice device, VkDescriptorSetLayout decriptorSetLayout, std::vector<VkImageView> imageView,
-	VkSampler sampler, std::vector<VkBuffer> uniformBuffer, int nbUbo, int nbTexture, bool useUboLights)
+	VkSampler sampler, std::vector<UboBase*> uniformBuffer, int nbTexture)
 {
 	VkDescriptorSetLayout layouts[] = { decriptorSetLayout };
 	VkDescriptorSetAllocateInfo allocInfo = {};
@@ -428,12 +426,12 @@ VkDescriptorSet RenderPass::createDescriptorSet(VkDevice device, VkDescriptorSet
 	std::vector<VkWriteDescriptorSet> descriptorWrites;
 
 	int i = 0;
-	std::vector<VkDescriptorBufferInfo> bufferInfo(nbUbo); // ne doit pas être détruit avant l'appel de vkUpdateDescriptorSets
-	for(; i < nbUbo; ++i)
+	std::vector<VkDescriptorBufferInfo> bufferInfo(uniformBuffer.size()); // ne doit pas être détruit avant l'appel de vkUpdateDescriptorSets
+	for(; i < uniformBuffer.size(); ++i)
 	{
-		bufferInfo[i].buffer = uniformBuffer[i];
+		bufferInfo[i].buffer = uniformBuffer[i]->getUniformBuffer();
 		bufferInfo[i].offset = 0;
-		bufferInfo[i].range = sizeof( UniformBufferObjectMatrices);
+		bufferInfo[i].range = uniformBuffer[i]->getSize();
 
 		VkWriteDescriptorSet descriptorWrite;
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -449,11 +447,11 @@ VkDescriptorSet RenderPass::createDescriptorSet(VkDevice device, VkDescriptorSet
 	}
 
 	std::vector<VkDescriptorImageInfo> imageInfo(nbTexture);
-	for(; i < nbUbo + nbTexture; ++i)
+	for(; i < uniformBuffer.size() + nbTexture; ++i)
 	{
-		imageInfo[i - nbUbo].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo[i - nbUbo].imageView = imageView[i - nbUbo];
-		imageInfo[i - nbUbo].sampler = sampler;
+		imageInfo[i - uniformBuffer.size()].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo[i - uniformBuffer.size()].imageView = imageView[i - uniformBuffer.size()];
+		imageInfo[i - uniformBuffer.size()].sampler = sampler;
 
 		VkWriteDescriptorSet descriptorWrite;
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -462,33 +460,8 @@ VkDescriptorSet RenderPass::createDescriptorSet(VkDevice device, VkDescriptorSet
 		descriptorWrite.dstArrayElement = 0;
 		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pImageInfo = &imageInfo[i - nbUbo];
+		descriptorWrite.pImageInfo = &imageInfo[i - uniformBuffer.size()];
 		descriptorWrite.pNext = NULL;
-
-		descriptorWrites.push_back(descriptorWrite);
-	}
-
-	if (useUboLights)
-	{
-		VkDescriptorBufferInfo uboLightBufferInfo;
-
-		uboLightBufferInfo.buffer = m_uboLights.uniformBuffer;
-		uboLightBufferInfo.offset = 0;
-		uboLightBufferInfo.range = sizeof(UniformBufferObjectLights);
-
-		VkWriteDescriptorSet descriptorWrite;
-		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = descriptorSet;
-		descriptorWrite.dstBinding = i;
-		descriptorWrite.dstArrayElement = 0;
-		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &uboLightBufferInfo;
-		descriptorWrite.pNext = NULL;
-
-#ifndef NDEBUG
-		std::cout << "L'UBO Lights se situe au binding " << i << std::endl;
-#endif // !NDEBUG
 
 		descriptorWrites.push_back(descriptorWrite);
 	}

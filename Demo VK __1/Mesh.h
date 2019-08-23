@@ -5,11 +5,19 @@
 #include "Vulkan.h"
 #include "Pipeline.h"
 
-class Mesh
+class MeshBase
+{
+public:
+	virtual ~MeshBase() {}
+};
+
+class MeshPBR : public MeshBase
 {
 public:
 	void loadObj(Vulkan * vk, std::string path, glm::vec3 forceNormal = glm::vec3(-1.0f));
 	void loadTexture(Vulkan * vk, std::vector<std::string> path);
+	void loadCubemap(Vulkan* vk, std::vector < std::string > path);
+	void loadHDRTexture(Vulkan* vk, std::vector < std::string > path);
 
 	void restoreTransformations() { m_modelMatrix = glm::mat4(1.0); }
 	void rotate(float angle, glm::vec3 dir);
@@ -21,18 +29,18 @@ private:
 	void createIndexBuffer(Vulkan * vk);
 
 	void createTextureImage(Vulkan * vk, std::string path);
-	void createTextureImageView(Vulkan * vk);
+	void createTextureImageView(Vulkan * vk, VkFormat format);
 	void createTextureSampler(Vulkan * vk);
 
 public:
-	std::vector<VkImageView> GetImageView() { return m_textureImageView; }
-	VkSampler GetSampler() { return m_textureSampler; }
-	VkBuffer GetVertexBuffer() { return m_vertexBuffer; }
-	VkBuffer GetIndexBuffer() { return m_indexBuffer; }
-	uint32_t GetNumIndices() { return static_cast<uint32_t>(m_indices.size()); }
-	glm::mat4x4 GetModelMatrix() { return m_modelMatrix; }
+	std::vector<VkImageView> getImageView() { return m_textureImageView; }
+	VkSampler getSampler() { return m_textureSampler; }
+	VkBuffer getVertexBuffer() { return m_vertexBuffer; }
+	VkBuffer getIndexBuffer() { return m_indexBuffer; }
+	uint32_t getNumIndices() { return static_cast<uint32_t>(m_indices.size()); }
+	glm::mat4x4 getModelMatrix() { return m_modelMatrix; }
 
-	void SetImageView(int index, VkImageView imageView) { m_textureImageView[index] = imageView; }
+	void setImageView(int index, VkImageView imageView) { m_textureImageView[index] = imageView; }
 
 private:
 	std::vector<Vertex> m_vertices;
@@ -50,4 +58,3 @@ private:
 
 	glm::mat4x4 m_modelMatrix;
 };
-

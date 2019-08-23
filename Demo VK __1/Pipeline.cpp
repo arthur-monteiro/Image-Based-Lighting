@@ -1,7 +1,8 @@
 #include "Pipeline.h"
 
 void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout, VkRenderPass renderPass, 
-	std::string vertPath, std::string fragPath, bool alphaBlending, bool text, VkSampleCountFlagBits msaaSamples)
+	std::string vertPath, std::string fragPath, bool alphaBlending, VkSampleCountFlagBits msaaSamples, std::vector<VkVertexInputBindingDescription> vertexInputDescription,
+	std::vector<VkVertexInputAttributeDescription> attributeInputDescription)
 {
 	auto vertShaderCode = readFile(vertPath);
 	auto fragShaderCode = readFile(fragPath);
@@ -26,19 +27,10 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-	auto bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-	if (text)
-	{
-		bindingDescription = TextVertex::getBindingDescription();
-		attributeDescriptions = TextVertex::getAttributeDescriptions();
-	}
-
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexInputDescription.size());
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeInputDescription.size());
+	vertexInputInfo.pVertexBindingDescriptions = vertexInputDescription.data();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeInputDescription.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -70,7 +62,7 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -138,7 +130,7 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = VK_TRUE;
 	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
 	pipelineInfo.pDepthStencilState = &depthStencil;

@@ -1,13 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(binding = 1) uniform sampler2D texAlbedo;
-layout(binding = 2) uniform sampler2D texNormal;
-layout(binding = 3) uniform sampler2D texRoughness;
-layout(binding = 4) uniform sampler2D texMetal;
-layout(binding = 5) uniform sampler2D texAO;
-
-layout(binding = 6) uniform UniformBufferObjectLights
+layout(binding = 1) uniform UniformBufferObjectLights
 {
 	vec4 camPos;
 
@@ -22,7 +16,11 @@ layout(binding = 6) uniform UniformBufferObjectLights
 
 layout(location = 0) in vec3 worldPos;
 layout(location = 1) in vec2 fragTexCoord;
-layout(location = 2) in mat3 tbn;
+layout(location = 2) in vec3 normal;
+
+layout(location = 5) in vec3 albedo;
+layout(location = 6) in float roughness;
+layout(location = 7) in float metallic;
 
 layout(location = 0) out vec4 outColor;
 
@@ -34,13 +32,9 @@ vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness);
 const float PI = 3.14159265359;
 
 void main() 
-{
-	vec3 albedo = pow(texture(texAlbedo, fragTexCoord).xyz, vec3(2.2));
-	
-	float roughness = texture(texRoughness, fragTexCoord).x;
-	float metallic = texture(texMetal, fragTexCoord).x;
-	float ao = texture(texAO, fragTexCoord).x;
-	vec3 normal = (texture(texNormal, fragTexCoord).xyz * 2.0 - vec3(1.0)) * tbn;
+{	
+	float ao = 1.0;
+	//vec3 normal = vec3(0.0, 0.0, 1.0) * tbn;
 
 	vec3 N = normalize(normal); 
     vec3 V = normalize(uboLights.camPos.xyz - worldPos);
@@ -69,15 +63,15 @@ void main()
 		kD *= 1.0 - metallic;	  
 		
 		vec3 nominator    = NDF * G * F;
-		float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; 
-		vec3 specular     = nominator / denominator;
+		float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0); 
+		vec3 specular     = nominator / max(denominator, 0.001);
 			
 		// add to outgoing radiance Lo
 		float NdotL = max(dot(N, L), 0.0);                
 		Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
 	}
 	
-	vec3 ambient = vec3(0.01) * albedo * ao;
+	vec3 ambient = vec3(0.03) * albedo * ao;
     vec3 color = ambient + Lo;
 	
     color = color / (color + vec3(1.0));
