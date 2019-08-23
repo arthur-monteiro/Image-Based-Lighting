@@ -48,7 +48,7 @@ bool System::mainLoop()
 		m_swapChainRenderPass.drawCall(&m_vk);
 	}
 
-	vkDeviceWaitIdle(m_vk.GetDevice());
+	vkDeviceWaitIdle(m_vk.getDevice());
 
 	return true;
 }
@@ -84,17 +84,45 @@ void System::createRessources()
 	//	"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });
 
 	m_skybox.loadObj(&m_vk, "Models/cube.obj");
-	m_skybox.loadCubemap(&m_vk, { "Textures/skybox/right.jpg", "Textures/skybox/left.jpg", "Textures/skybox/top.jpg", "Textures/skybox/bottom.jpg", "Textures/skybox/front.jpg",
-		"Textures/skybox/back.jpg" });
+	//m_skybox.loadCubemapFromFile(&m_vk, { "Textures/skybox/right.jpg", "Textures/skybox/left.jpg", "Textures/skybox/top.jpg", "Textures/skybox/bottom.jpg", "Textures/skybox/front.jpg",
+	//	"Textures/skybox/back.jpg" });
 	//m_meshes[1]->loadHDRTexture(&m_vk, { "Textures/simons_town_rocks_4k.hdr" });
 
-	for (int i(0); i < 10; ++i)
-	{
-		for (int j(0); j < 10; ++j)
-		{
+	RenderPass tempCubemapCreation;
+	tempCubemapCreation.initialize(&m_vk, true, { 2048, 2048 }, false, VK_SAMPLE_COUNT_8_BIT, 6);
 
-		}
+	MeshPBR tempCube;
+	tempCube.loadObj(&m_vk, "Models/cube.obj");
+	tempCube.loadHDRTexture(&m_vk, { "Textures/simons_town_rocks_4k.hdr" });
+
+	glm::mat4 captureViews[] =
+	{
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+		glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+	};
+	std::vector<UniformBufferObject<UniformBufferObjectVP>> tempUboVP(6);
+	for (int i(0); i < 6; ++i)
+	{
+		UniformBufferObjectVP tempUboVPData;
+		tempUboVPData.proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+		tempUboVPData.view = captureViews[i];
+		
+		tempUboVP[i].load(&m_vk, tempUboVPData, VK_SHADER_STAGE_VERTEX_BIT);
+
+		tempCubemapCreation.addMesh(&m_vk, { { &tempCube, { &tempUboVP[i] } } }, "Shaders/vert.spv", "Shaders/frag.spv", 1, i);
 	}
+
+	tempCubemapCreation.recordDraw(&m_vk);
+	tempCubemapCreation.drawCall(&m_vk);
+
+	vkQueueWaitIdle(m_vk.getGraphicalQueue());
+
+	m_skybox.loadCubemapFromImages(&m_vk, { tempCubemapCreation.getFrameBuffer(0).image, tempCubemapCreation.getFrameBuffer(1).image, tempCubemapCreation.getFrameBuffer(2).image,
+		tempCubemapCreation.getFrameBuffer(3).image , tempCubemapCreation.getFrameBuffer(4).image , tempCubemapCreation.getFrameBuffer(5).image }, 2048, 2048);
 }
 
 void System::createPasses(bool recreate)
@@ -131,16 +159,12 @@ void System::createPasses(bool recreate)
 		spheres.push_back(meshRender);
 	}
 
-	UniformBufferObjectModel uboModel; 
-	uboModel.model = glm::mat4(1.0f);
-	m_uboModelBox.load(&m_vk, uboModel, VK_SHADER_STAGE_VERTEX_BIT);
-
-	m_uboVPData.proj = glm::perspective(glm::radians(45.0f), m_vk.GetSwapChainExtend().width / (float)m_vk.GetSwapChainExtend().height, 0.1f, 100.0f);
+	m_uboVPData.proj = glm::perspective(glm::radians(45.0f), m_vk.getSwapChainExtend().width / (float)m_vk.getSwapChainExtend().height, 0.1f, 100.0f);
 	m_uboVPData.proj[1][1] *= -1;
 	m_uboVPData.view = m_camera.getViewMatrix();
 	m_uboVP.load(&m_vk, m_uboVPData, VK_SHADER_STAGE_VERTEX_BIT);
 
-	m_uboVPSkyboxData.proj = glm::perspective(glm::radians(45.0f), m_vk.GetSwapChainExtend().width / (float)m_vk.GetSwapChainExtend().height, 0.1f, 10.0f);
+	m_uboVPSkyboxData.proj = glm::perspective(glm::radians(45.0f), m_vk.getSwapChainExtend().width / (float)m_vk.getSwapChainExtend().height, 0.1f, 10.0f);
 	m_uboVPSkyboxData.proj[1][1] *= -1;
 	m_uboVPSkyboxData.view = glm::mat4(glm::mat3(m_camera.getViewMatrix()));
 	m_uboVPSkybox.load(&m_vk, m_uboVPSkyboxData, VK_SHADER_STAGE_VERTEX_BIT);
@@ -169,7 +193,7 @@ void System::createPasses(bool recreate)
 	}
 	m_sphereInstance.load(&m_vk, sizeof(perInstance[0]) * perInstance.size(), perInstance.data());
 
-	m_swapChainRenderPass.addMeshInstanced(&m_vk, { { &m_sphere, { &m_uboVP, &m_uboLight }, &m_sphereInstance } }, "Shaders/vert.spv", "Shaders/frag.spv", 0);
+	m_swapChainRenderPass.addMeshInstanced(&m_vk, { { &m_sphere, { &m_uboVP, &m_uboLight }, &m_sphereInstance } }, "Shaders/vertPBR.spv", "Shaders/fragPBR.spv", 0);
 	m_swapChainRenderPass.addMesh(&m_vk, spheres, "Shaders/vertSphere.spv", "Shaders/fragSphere.spv", 0);
 	m_skyboxID = m_swapChainRenderPass.addMesh(&m_vk, { { &m_skybox, { &m_uboVPSkybox } } }, "Shaders/vertSkybox.spv", "Shaders/fragSkybox.spv", 1);
 	m_swapChainRenderPass.recordDraw(&m_vk);

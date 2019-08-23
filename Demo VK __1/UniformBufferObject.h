@@ -71,17 +71,17 @@ public:
 		m_accessibility = accessibility;
 
 		void* pData;
-		vkMapMemory(vk->GetDevice(), m_uniformBufferMemory, 0, m_size, 0, &pData);
+		vkMapMemory(vk->getDevice(), m_uniformBufferMemory, 0, m_size, 0, &pData);
 			memcpy(pData, &data, m_size);
-		vkUnmapMemory(vk->GetDevice(), m_uniformBufferMemory);
+		vkUnmapMemory(vk->getDevice(), m_uniformBufferMemory);
 	}
 
 	void update(Vulkan* vk, T data)
 	{
 		void* pData;
-		vkMapMemory(vk->GetDevice(), m_uniformBufferMemory, 0, m_size, 0, &pData);
+		vkMapMemory(vk->getDevice(), m_uniformBufferMemory, 0, m_size, 0, &pData);
 			memcpy(pData, &data, m_size);
-		vkUnmapMemory(vk->GetDevice(), m_uniformBufferMemory);
+		vkUnmapMemory(vk->getDevice(), m_uniformBufferMemory);
 	}
 
 	void cleanup(VkDevice device);

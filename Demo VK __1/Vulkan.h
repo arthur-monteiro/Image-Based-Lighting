@@ -39,6 +39,8 @@ struct MeshPipeline
 	VkPipeline pipeline;
 	VkPipelineLayout pipelineLayout;
 
+	int frameBufferID = 0;
+
 	void free(VkDevice device, VkDescriptorPool descriptorPool, bool recreate = false)
 	{
 		for (int i = 0; i < vertexBuffer.size(); ++i)
@@ -93,15 +95,15 @@ public:
 		m_deviceExtensions = extensions;
 	}
 
-	VkFormat GetSwapChainImageFormat() { return m_swapChainImageFormat; }
-	VkDevice GetDevice() { return m_device; }
-	VkExtent2D GetSwapChainExtend() { return m_swapChainExtent; }
+	VkFormat getSwapChainImageFormat() { return m_swapChainImageFormat; }
+	VkDevice getDevice() { return m_device; }
+	VkExtent2D getSwapChainExtend() { return m_swapChainExtent; }
 	GLFWwindow* GetWindow() { return m_window; }
-	VkQueue GetGraphicalQueue() { return m_graphicsQueue; }
-	VkSemaphore GetRenderFinishedSemaphore() { return m_renderFinishedSemaphore; }
+	VkQueue getGraphicalQueue() { return m_graphicsQueue; }
+	VkSemaphore getRenderFinishedSemaphore() { return m_renderFinishedSemaphore; }
 	VkSampleCountFlagBits getMaxMsaaSamples() { return m_maxMsaaSamples; }
 
-	void SetRenderFinishedLastRenderPassSemaphore(VkSemaphore semaphore) { m_renderFinishedLastRenderPassSemaphore = semaphore; }
+	void setRenderFinishedLastRenderPassSemaphore(VkSemaphore semaphore) { m_renderFinishedLastRenderPassSemaphore = semaphore; }
 
 private:
 	void createInstance();
@@ -137,7 +139,8 @@ public :
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height, uint32_t baseArrayLayer);
-	FrameBuffer createFrameBuffer(VkExtent2D extent, VkRenderPass renderPass);
+	void copyImage(VkImage source, VkImage dst, uint32_t width, uint32_t height, uint32_t baseArrayLayer);
+	FrameBuffer createFrameBuffer(VkExtent2D extent, VkRenderPass renderPass, VkSampleCountFlagBits msaaSamples, VkImageView colorImageView);
 	void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels, uint32_t baseArrayLayer);
 	VkSampleCountFlagBits getMaxUsableSampleCount();
 

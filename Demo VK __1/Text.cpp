@@ -45,9 +45,9 @@ void Text::initialize(Vulkan * vk, int ySize, std::string path)
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 		void* data;
-		vkMapMemory(vk->GetDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
+		vkMapMemory(vk->getDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
 			memcpy(data, pixels, static_cast<size_t>(imageSize));
-		vkUnmapMemory(vk->GetDevice(), stagingBufferMemory);
+		vkUnmapMemory(vk->getDevice(), stagingBufferMemory);
 
 		delete pixels;
 
@@ -60,8 +60,8 @@ void Text::initialize(Vulkan * vk, int ySize, std::string path)
 		vk->transitionImageLayout(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, 1);
 
-		vkDestroyBuffer(vk->GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(vk->GetDevice(), stagingBufferMemory, nullptr);
+		vkDestroyBuffer(vk->getDevice(), stagingBuffer, nullptr);
+		vkFreeMemory(vk->getDevice(), stagingBufferMemory, nullptr);
 
 		character.imageView = vk->createImageView(character.image, VK_FORMAT_R8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
 
@@ -86,7 +86,7 @@ void Text::initialize(Vulkan * vk, int ySize, std::string path)
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-	if (vkCreateSampler(vk->GetDevice(), &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS)
+	if (vkCreateSampler(vk->getDevice(), &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : création d'un sampler");
 
 	std::vector<uint32_t> indices = { 0, 2, 1, 1, 2, 3};
@@ -97,17 +97,17 @@ void Text::initialize(Vulkan * vk, int ySize, std::string path)
 	vk->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 	void* data;
-	vkMapMemory(vk->GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+	vkMapMemory(vk->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
 		memcpy(data, indices.data(), (size_t)bufferSize);
-	vkUnmapMemory(vk->GetDevice(), stagingBufferMemory);
+	vkUnmapMemory(vk->getDevice(), stagingBufferMemory);
 
 	vk->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
 
 	vk->copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
 
-	vkDestroyBuffer(vk->GetDevice(), stagingBuffer, nullptr);
-	vkFreeMemory(vk->GetDevice(), stagingBufferMemory, nullptr);
+	vkDestroyBuffer(vk->getDevice(), stagingBuffer, nullptr);
+	vkFreeMemory(vk->getDevice(), stagingBufferMemory, nullptr);
 }
 
 int Text::addText(Vulkan * vk, std::wstring text, glm::vec2 pos, float maxSize)
@@ -126,8 +126,8 @@ void Text::changeText(Vulkan * vk, std::wstring text, int textID)
 
 	for (int i = 0; i < m_texts[textID].vertexBufferMemories.size(); ++i)
 	{
-		vkDestroyBuffer(vk->GetDevice(), m_texts[textID].vertexBuffers[i], nullptr);
-		vkFreeMemory(vk->GetDevice(), m_texts[textID].vertexBufferMemories[i], nullptr);
+		vkDestroyBuffer(vk->getDevice(), m_texts[textID].vertexBuffers[i], nullptr);
+		vkFreeMemory(vk->getDevice(), m_texts[textID].vertexBufferMemories[i], nullptr);
 	}
 	m_texts[textID].character.clear();
 	m_texts[textID].vertexBufferMemories.clear();
@@ -147,7 +147,7 @@ Text::TextStruct Text::createTextStruct(Vulkan * vk, std::wstring text, glm::vec
 	std::vector<std::array<TextVertex, 4>> vertices;
 	float offsetX = 0.0f;
 	glm::vec2 offset = /*glm::vec3(-1.0f, -1.0f, 0.0f) +*/ pos;
-	float scale = (vk->GetSwapChainExtend().height / (float)m_maxYSize) * maxSize * 2.0f;
+	float scale = (vk->getSwapChainExtend().height / (float)m_maxYSize) * maxSize * 2.0f;
 
 	for (int i = 0; i < text.size(); ++i)
 	{
@@ -161,13 +161,13 @@ Text::TextStruct Text::createTextStruct(Vulkan * vk, std::wstring text, glm::vec
 			glm::vec2 botRight = { offsetX + m_characters[text[i]].xSize, m_maxYSize };
 
 			std::array<TextVertex, 4> vert;
-			vert[0].pos = scale * topLeft / glm::vec2(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height) + offset;
+			vert[0].pos = scale * topLeft / glm::vec2(vk->getSwapChainExtend().width, vk->getSwapChainExtend().height) + offset;
 			vert[0].texCoord = glm::vec2(0.0f, 0.0f);
-			vert[1].pos = scale * topRight / glm::vec2(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height) + offset;
+			vert[1].pos = scale * topRight / glm::vec2(vk->getSwapChainExtend().width, vk->getSwapChainExtend().height) + offset;
 			vert[1].texCoord = glm::vec2(1.0f, 0.0f);
-			vert[2].pos = scale * botLeft / glm::vec2(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height) + offset;
+			vert[2].pos = scale * botLeft / glm::vec2(vk->getSwapChainExtend().width, vk->getSwapChainExtend().height) + offset;
 			vert[2].texCoord = glm::vec2(0.0f, 1.0f);
-			vert[3].pos = scale * botRight / glm::vec2(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height) + offset;
+			vert[3].pos = scale * botRight / glm::vec2(vk->getSwapChainExtend().width, vk->getSwapChainExtend().height) + offset;
 			vert[3].texCoord = glm::vec2(1.0f, 1.0f);
 
 			vertices.push_back(vert);
@@ -189,9 +189,9 @@ Text::TextStruct Text::createTextStruct(Vulkan * vk, std::wstring text, glm::vec
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
 		void* data;
-		vkMapMemory(vk->GetDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
+		vkMapMemory(vk->getDevice(), stagingBufferMemory, 0, bufferSize, 0, &data);
 		memcpy(data, vertices[i].data(), (size_t)bufferSize);
-		vkUnmapMemory(vk->GetDevice(), stagingBufferMemory);
+		vkUnmapMemory(vk->getDevice(), stagingBufferMemory);
 
 		VkBuffer vertexBuffer;
 		VkDeviceMemory vertexBufferMemory;
@@ -200,8 +200,8 @@ Text::TextStruct Text::createTextStruct(Vulkan * vk, std::wstring text, glm::vec
 
 		vk->copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
-		vkDestroyBuffer(vk->GetDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(vk->GetDevice(), stagingBufferMemory, nullptr);
+		vkDestroyBuffer(vk->getDevice(), stagingBuffer, nullptr);
+		vkFreeMemory(vk->getDevice(), stagingBufferMemory, nullptr);
 
 		textStruct.vertexBuffers.push_back(vertexBuffer);
 		textStruct.vertexBufferMemories.push_back(vertexBufferMemory);

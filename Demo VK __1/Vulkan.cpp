@@ -392,6 +392,14 @@ void Vulkan::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		}
+		else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+		{
+			barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		}
 		else
 		{
 			throw std::runtime_error("Erreur : transition non supportée");
@@ -766,27 +774,62 @@ void Vulkan::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, u
 	endSingleTimeCommands(commandBuffer);
 }
 
-FrameBuffer Vulkan::createFrameBuffer(VkExtent2D extent, VkRenderPass renderPass)
+void Vulkan::copyImage(VkImage source, VkImage dst, uint32_t width, uint32_t height, uint32_t baseArrayLayer)
+{
+	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+	VkImageCopy copyRegion = {};
+
+	copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.srcSubresource.baseArrayLayer = 0;
+	copyRegion.srcSubresource.mipLevel = 0;
+	copyRegion.srcSubresource.layerCount = 1;
+	copyRegion.srcOffset = { 0, 0, 0 };
+
+	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.dstSubresource.baseArrayLayer = baseArrayLayer;
+	copyRegion.dstSubresource.mipLevel = 0;
+	copyRegion.dstSubresource.layerCount = 1;
+	copyRegion.dstOffset = { 0, 0, 0 };
+
+	copyRegion.extent.width = width;
+	copyRegion.extent.height = height;
+	copyRegion.extent.depth = 1;
+
+	vkCmdCopyImage(
+		commandBuffer,
+		source,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		dst,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1,
+		&copyRegion);
+
+	endSingleTimeCommands(commandBuffer);
+}
+
+FrameBuffer Vulkan::createFrameBuffer(VkExtent2D extent, VkRenderPass renderPass, VkSampleCountFlagBits msaaSamples, VkImageView colorImageView)
 {
 	FrameBuffer frameBuffer;
 
 	VkFormat depthFormat = findDepthFormat();
-	createImage(extent.width, extent.height, 1, VK_SAMPLE_COUNT_1_BIT, depthFormat,
+	createImage(extent.width, extent.height, 1, msaaSamples, depthFormat,
 		VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 0, frameBuffer.depthImage, frameBuffer.depthImageMemory);
 	frameBuffer.depthImageView = createImageView(frameBuffer.depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
 
 	transitionImageLayout(frameBuffer.depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1, 1);
 
-	createImage(extent.width, extent.height, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 0,
+	createImage(extent.width, extent.height, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 0,
 		frameBuffer.image, frameBuffer.imageMemory);
-	frameBuffer.imageView = createImageView(frameBuffer.image, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
+	frameBuffer.imageView = createImageView(frameBuffer.image, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
 
-	std::array<VkImageView, 2> attachments =
+	std::array<VkImageView, 3> attachments =
 	{
-		frameBuffer.imageView,
-		frameBuffer.depthImageView
+		colorImageView,
+		frameBuffer.depthImageView,
+		frameBuffer.imageView
 	};
 
 	VkFramebufferCreateInfo framebufferInfo = {};

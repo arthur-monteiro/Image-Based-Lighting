@@ -20,9 +20,9 @@ struct MeshRender
 class RenderPass
 {
 public:
-	void initialize(Vulkan* vk, bool createFrameBuffer = false, VkExtent2D extent = { 0, 0 }, bool present = true, VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT);
+	void initialize(Vulkan* vk, bool createFrameBuffer = false, VkExtent2D extent = { 0, 0 }, bool present = true, VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT, int nbFramebuffer = 1);
 
-	int addMesh(Vulkan * vk, std::vector<MeshRender> mesh, std::string vertPath, std::string fragPath, int nbTexture);
+	int addMesh(Vulkan * vk, std::vector<MeshRender> mesh, std::string vertPath, std::string fragPath, int nbTexture, int frameBufferID = 0);
 	int addMeshInstanced(Vulkan* vk, std::vector<MeshRender> meshes, std::string vertPath, std::string fragPath, int nbTexture);
 	int addText(Vulkan * vk, Text * text);
 
@@ -34,7 +34,7 @@ public:
 
 private:
 	void createRenderPass(VkDevice device, VkImageLayout finalLayout);
-	void createColorResources(Vulkan * vk);
+	void createColorResources(Vulkan * vk, VkExtent2D extent);
 	VkDescriptorSetLayout createDescriptorSetLayout(VkDevice device, std::vector<UboBase*> uniformBuffers, int nbTexture);
 	void createDescriptorPool(VkDevice device);
 	VkDescriptorSet createDescriptorSet(VkDevice device, VkDescriptorSetLayout decriptorSetLayout, std::vector<VkImageView> imageView,
@@ -44,7 +44,7 @@ private:
 
 public:
 	VkRenderPass GetRenderPass() { return m_renderPass; }
-	FrameBuffer GetFrameBuffer() { return m_frameBuffer; }
+	FrameBuffer getFrameBuffer(int index) { return m_frameBuffers[index]; }
 
 private:
 	VkFormat m_format;
@@ -67,9 +67,9 @@ private:
 
 	bool m_useSwapChain = true;
 	bool m_firstDraw = true;
-	FrameBuffer m_frameBuffer;
+	std::vector<FrameBuffer> m_frameBuffers;
 	VkExtent2D m_extent;
-	VkCommandBuffer m_commandBuffer;
+	std::vector <VkCommandBuffer> m_commandBuffer;
 	VkSemaphore m_renderCompleteSemaphore;
 	VkCommandPool m_commandPool;
 

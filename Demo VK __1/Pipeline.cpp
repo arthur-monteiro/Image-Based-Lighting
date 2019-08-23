@@ -2,13 +2,13 @@
 
 void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout, VkRenderPass renderPass, 
 	std::string vertPath, std::string fragPath, bool alphaBlending, VkSampleCountFlagBits msaaSamples, std::vector<VkVertexInputBindingDescription> vertexInputDescription,
-	std::vector<VkVertexInputAttributeDescription> attributeInputDescription)
+	std::vector<VkVertexInputAttributeDescription> attributeInputDescription, VkExtent2D extent)
 {
 	auto vertShaderCode = readFile(vertPath);
 	auto fragShaderCode = readFile(fragPath);
 
-	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode, vk->GetDevice());
-	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode, vk->GetDevice());
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode, vk->getDevice());
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode, vk->getDevice());
 
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -40,14 +40,14 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = (float)vk->GetSwapChainExtend().width;
-	viewport.height = (float)vk->GetSwapChainExtend().height;
+	viewport.width = (float)extent.width;
+	viewport.height = (float)extent.height;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
 	VkRect2D scissor = {};
 	scissor.offset = { 0, 0 };
-	scissor.extent = vk->GetSwapChainExtend();
+	scissor.extent = extent;
 
 	VkPipelineViewportStateCreateInfo viewportState = {};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -108,7 +108,7 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 
-	if (vkCreatePipelineLayout(vk->GetDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
+	if (vkCreatePipelineLayout(vk->getDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : pipeline layout");
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -135,11 +135,11 @@ void Pipeline::initialize(Vulkan* vk, VkDescriptorSetLayout* descriptorSetLayout
 	depthStencil.stencilTestEnable = VK_FALSE;
 	pipelineInfo.pDepthStencilState = &depthStencil;
 
-	if (vkCreateGraphicsPipelines(vk->GetDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(vk->getDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_graphicsPipeline) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : graphic pipeline");
 
-	vkDestroyShaderModule(vk->GetDevice(), fragShaderModule, nullptr);
-	vkDestroyShaderModule(vk->GetDevice(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vk->getDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vk->getDevice(), vertShaderModule, nullptr);
 }
 
 std::vector<char> Pipeline::readFile(const std::string & filename)

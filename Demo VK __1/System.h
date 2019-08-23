@@ -59,7 +59,6 @@ private:
 	UniformBufferObjectVP m_uboVPSkyboxData;
 	UniformBufferObject<UniformBufferObjectLights> m_uboLight;
 	UniformBufferObjectLights m_uboLightsData;
-	UniformBufferObject<UniformBufferObjectModel> m_uboModelBox;
 	std::vector<UniformBufferObject<UniformBufferObjectModel>> m_uboSpheres;
 
 	Camera m_camera;

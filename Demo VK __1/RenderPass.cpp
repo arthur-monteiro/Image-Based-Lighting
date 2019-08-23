@@ -1,42 +1,49 @@
 #include "RenderPass.h"
 
-void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D extent, bool present, VkSampleCountFlagBits msaaSamples)
+void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D extent, bool present, VkSampleCountFlagBits msaaSamples, int nbFramebuffer)
 {
 	m_text = nullptr;
 	m_msaaSamples = msaaSamples;
+	m_extent = createFrameBuffer ? extent : vk->getSwapChainExtend();
 
-	m_format = vk->GetSwapChainImageFormat();
+	m_format = vk->getSwapChainImageFormat();
+	if (createFrameBuffer)
+		m_format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	m_depthFormat = vk->findDepthFormat();
 
 	if(present)
-		createRenderPass(vk->GetDevice(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		createRenderPass(vk->getDevice(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	else
-		createRenderPass(vk->GetDevice(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	createDescriptorPool(vk->GetDevice());
+		createRenderPass(vk->getDevice(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	createDescriptorPool(vk->getDevice());
 	
-	createColorResources(vk);
+	createColorResources(vk, m_extent);
 	if (createFrameBuffer)
-		m_frameBuffer = vk->createFrameBuffer(extent, m_renderPass);
+	{
+		m_frameBuffers.resize(nbFramebuffer);
+		m_commandBuffer.resize(nbFramebuffer);
+		for(int i(0); i < nbFramebuffer; ++i)
+			m_frameBuffers[i] = vk->createFrameBuffer(extent, m_renderPass, m_msaaSamples, m_colorImageView);
+	}
 	else
 		vk->createSwapchainFramebuffers(m_renderPass, m_msaaSamples, m_colorImageView);
 
-	m_textDescriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), std::vector<UboBase*>(), 1);
+	m_textDescriptorSetLayout = createDescriptorSetLayout(vk->getDevice(), std::vector<UboBase*>(), 1);
 	m_textPipeline.initialize(vk, &m_textDescriptorSetLayout, m_renderPass, "Shaders/TextVert.spv", 
-		"Shaders/TextFrag.spv", true, m_msaaSamples, { TextVertex::getBindingDescription() }, TextVertex::getAttributeDescriptions());
+		"Shaders/TextFrag.spv", true, m_msaaSamples, { TextVertex::getBindingDescription() }, TextVertex::getAttributeDescriptions(), vk->getSwapChainExtend());
 
 	m_useSwapChain = !createFrameBuffer;
 	VkSemaphoreCreateInfo semaphoreInfo = {};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	if (vkCreateSemaphore(vk->GetDevice(), &semaphoreInfo, nullptr, &m_renderCompleteSemaphore) != VK_SUCCESS)
+	if (vkCreateSemaphore(vk->getDevice(), &semaphoreInfo, nullptr, &m_renderCompleteSemaphore) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : création de la sémaphores");
-	m_extent = extent;
 
-	vk->SetRenderFinishedLastRenderPassSemaphore(m_renderCompleteSemaphore);
+	vk->setRenderFinishedLastRenderPassSemaphore(m_renderCompleteSemaphore);
 
 	m_commandPool = vk->createCommandPool();
 }
 
-int RenderPass::addMesh(Vulkan * vk, std::vector<MeshRender> meshes, std::string vertPath, std::string fragPath, int nbTexture)
+int RenderPass::addMesh(Vulkan * vk, std::vector<MeshRender> meshes, std::string vertPath, std::string fragPath, int nbTexture, int frameBufferID)
 {
 	/* Ici tous les meshes sont rendus avec les mêmes shaders */
 	for (int i(0); i < meshes.size(); ++i)
@@ -46,10 +53,10 @@ int RenderPass::addMesh(Vulkan * vk, std::vector<MeshRender> meshes, std::string
 	MeshPipeline meshesPipeline;
 
 	// Tous les meshes doivent avoir la même définition d'ubo
-	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), meshes[0].ubos, nbTexture);
+	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->getDevice(), meshes[0].ubos, nbTexture);
 
 	Pipeline pipeline;
-	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, m_msaaSamples, { Vertex::getBindingDescription(0) }, Vertex::getAttributeDescriptions(0));
+	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, m_msaaSamples, { Vertex::getBindingDescription(0) }, Vertex::getAttributeDescriptions(0), m_extent);
 	meshesPipeline.pipeline = pipeline.GetGraphicsPipeline();
 	meshesPipeline.pipelineLayout = pipeline.GetPipelineLayout();
 	
@@ -64,10 +71,12 @@ int RenderPass::addMesh(Vulkan * vk, std::vector<MeshRender> meshes, std::string
 			std::cout << "Attention : le nombre de texture utilisés n'est pas égale au nombre de textures du mesh" << std::endl;
 #endif // DEBUG
 
-		VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), descriptorSetLayout,
+		VkDescriptorSet descriptorSet = createDescriptorSet(vk->getDevice(), descriptorSetLayout,
 			meshes[i].mesh->getImageView(), meshes[i].mesh->getSampler(), meshes[i].ubos, nbTexture);
 		meshesPipeline.descriptorSet.push_back(descriptorSet);
 	}
+
+	meshesPipeline.frameBufferID = frameBufferID;
 	
 	m_meshesPipeline.push_back(meshesPipeline);
 
@@ -78,7 +87,7 @@ int RenderPass::addMeshInstanced(Vulkan* vk, std::vector<MeshRender> meshes, std
 {
 	MeshPipeline meshesPipelineInstanced;
 
-	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->GetDevice(), meshes[0].ubos, nbTexture);
+	VkDescriptorSetLayout descriptorSetLayout = createDescriptorSetLayout(vk->getDevice(), meshes[0].ubos, nbTexture);
 
 	Pipeline pipeline;
 	std::vector<VkVertexInputAttributeDescription> attributeDescription = Vertex::getAttributeDescriptions(0);
@@ -88,7 +97,7 @@ int RenderPass::addMeshInstanced(Vulkan* vk, std::vector<MeshRender> meshes, std
 		attributeDescription.push_back(instanceAttributeDescription[i]);
 	}
 	pipeline.initialize(vk, &descriptorSetLayout, m_renderPass, vertPath, fragPath, false, m_msaaSamples, { Vertex::getBindingDescription(0), ModelInstance::getBindingDescription(1) }, 
-		attributeDescription);
+		attributeDescription, m_extent);
 	meshesPipelineInstanced.pipeline = pipeline.GetGraphicsPipeline();
 	meshesPipelineInstanced.pipelineLayout = pipeline.GetPipelineLayout();
 
@@ -104,7 +113,7 @@ int RenderPass::addMeshInstanced(Vulkan* vk, std::vector<MeshRender> meshes, std
 			std::cout << "Attention : le nombre de texture utilisés n'est pas égale au nombre de textures du mesh" << std::endl;
 #endif // DEBUG
 
-		VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), descriptorSetLayout,
+		VkDescriptorSet descriptorSet = createDescriptorSet(vk->getDevice(), descriptorSetLayout,
 			meshes[i].mesh->getImageView(), meshes[i].mesh->getSampler(), meshes[i].ubos, nbTexture);
 		meshesPipelineInstanced.descriptorSet.push_back(descriptorSet);
 	}
@@ -132,7 +141,7 @@ int RenderPass::addText(Vulkan * vk, Text * text)
 			meshPipeline.indexBuffer.push_back(text->GetIndexBuffer());
 			meshPipeline.nbIndices.push_back(6);
 
-			VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), m_textDescriptorSetLayout,
+			VkDescriptorSet descriptorSet = createDescriptorSet(vk->getDevice(), m_textDescriptorSetLayout,
 				std::vector<VkImageView>(1, text->GetImageView(i, j)), text->GetSampler(), std::vector<UboBase*>(), 1);
 			meshPipeline.descriptorSet.push_back(descriptorSet);
 		}
@@ -150,9 +159,9 @@ int RenderPass::addText(Vulkan * vk, Text * text)
 	m_uboLights.nbPointLights++;
 
 	void* data;
-	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
+	vkMapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 		memcpy(data, &m_uboLights, sizeof(m_uboLights));
-	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
+	vkUnmapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory);
 
 	return m_uboLights.nbPointLights - 1;
 }
@@ -164,9 +173,9 @@ int RenderPass::addDirLight(Vulkan* vk, glm::vec3 direction, glm::vec3 color)
 	m_uboLights.nbDirLights++;
 
 	void* data;
-	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
+	vkMapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 	memcpy(data, &m_uboLights, sizeof(m_uboLights));
-	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
+	vkUnmapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory);
 
 	return m_uboLights.nbDirLights - 1;
 }*/
@@ -192,13 +201,13 @@ void RenderPass::recordDraw(Vulkan * vk)
 			ubo.view = glm::mat4(glm::mat3(m_camera.getViewMatrix()));
 		else
 			ubo.view = m_camera.getViewMatrix();
-		ubo.proj = glm::perspective(glm::radians(45.0f), vk->GetSwapChainExtend().width / (float)vk->GetSwapChainExtend().height, 0.1f, 10.0f);
+		ubo.proj = glm::perspective(glm::radians(45.0f), vk->getSwapChainExtend().width / (float)vk->getSwapChainExtend().height, 0.1f, 10.0f);
 		ubo.proj[1][1] *= -1;
 
 		void* data;
-		vkMapMemory(vk->GetDevice(), m_ubosMatrices[i].uniformBufferMemory, 0, sizeof(ubo), 0, &data);
+		vkMapMemory(vk->getDevice(), m_ubosMatrices[i].uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
-		vkUnmapMemory(vk->GetDevice(), m_ubosMatrices[i].uniformBufferMemory);
+		vkUnmapMemory(vk->getDevice(), m_ubosMatrices[i].uniformBufferMemory);
 
 		if (meshID != -1)
 			break;
@@ -207,16 +216,16 @@ void RenderPass::recordDraw(Vulkan * vk)
 	m_uboLights.camPos = glm::vec4(m_camera.getPosition(), 1.0f);
 
 	void* data;
-	vkMapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
+	vkMapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory, 0, sizeof(m_uboLights), 0, &data);
 		memcpy(data, &m_uboLights, sizeof(m_uboLights));
-	vkUnmapMemory(vk->GetDevice(), m_uboLights.uniformBufferMemory);
+	vkUnmapMemory(vk->getDevice(), m_uboLights.uniformBufferMemory);
 }*/
 
 void RenderPass::drawCall(Vulkan * vk)
 {
 	if (m_text && m_text->NeedUpdate() != -1)
 	{
-		m_meshesPipeline[m_textID[m_text->NeedUpdate()]].free(vk->GetDevice(), m_descriptorPool);
+		m_meshesPipeline[m_textID[m_text->NeedUpdate()]].free(vk->getDevice(), m_descriptorPool);
 		//m_meshesPipeline.erase(m_meshesPipeline.begin() + m_textID[m_text->NeedUpdate()]);
 
 		//m_textID[m_text->NeedUpdate()] = m_meshesPipeline.size();
@@ -230,7 +239,7 @@ void RenderPass::drawCall(Vulkan * vk)
 			meshPipeline.indexBuffer.push_back(m_text->GetIndexBuffer());
 			meshPipeline.nbIndices.push_back(6);
 
-			VkDescriptorSet descriptorSet = createDescriptorSet(vk->GetDevice(), m_textDescriptorSetLayout,
+			VkDescriptorSet descriptorSet = createDescriptorSet(vk->getDevice(), m_textDescriptorSetLayout,
 				std::vector<VkImageView>(1, m_text->GetImageView(m_text->NeedUpdate(), j)), m_text->GetSampler(),
 				std::vector<UboBase*>(), 1);
 			meshPipeline.descriptorSet.push_back(descriptorSet);
@@ -251,18 +260,18 @@ void RenderPass::drawCall(Vulkan * vk)
 
 void RenderPass::cleanup(Vulkan * vk)
 {
-	vkDestroyImageView(vk->GetDevice(), m_colorImageView, nullptr);
-	vkDestroyImage(vk->GetDevice(), m_colorImage, nullptr);
-	vkFreeMemory(vk->GetDevice(), m_colorImageMemory, nullptr);
+	vkDestroyImageView(vk->getDevice(), m_colorImageView, nullptr);
+	vkDestroyImage(vk->getDevice(), m_colorImage, nullptr);
+	vkFreeMemory(vk->getDevice(), m_colorImageMemory, nullptr);
 
 	for (int i(0); i < m_meshesPipeline.size(); ++i)
-		m_meshesPipeline[i].free(vk->GetDevice(), m_descriptorPool, true); // ne détruit pas les ressources
+		m_meshesPipeline[i].free(vk->getDevice(), m_descriptorPool, true); // ne détruit pas les ressources
 
 	m_meshes.clear();
 
 	m_meshesPipeline.clear();
 
-	vkDestroyRenderPass(vk->GetDevice(), m_renderPass, nullptr);
+	vkDestroyRenderPass(vk->getDevice(), m_renderPass, nullptr);
 }
 
 void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
@@ -275,7 +284,7 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = finalLayout;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference colorAttachmentRef = {};
 	colorAttachmentRef.attachment = 0;
@@ -303,11 +312,11 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 	colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	colorAttachmentResolve.finalLayout = finalLayout;
 
 	VkAttachmentReference colorAttachmentResolveRef = {};
 	colorAttachmentResolveRef.attachment = 2;
-	colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -338,11 +347,11 @@ void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)
 		throw std::runtime_error("Erreur : render pass");
 }
 
-void RenderPass::createColorResources(Vulkan* vk)
+void RenderPass::createColorResources(Vulkan* vk, VkExtent2D extent)
 {
 	VkFormat colorFormat = m_format;
 
-	vk->createImage(vk->GetSwapChainExtend().width, vk->GetSwapChainExtend().height, 1, m_msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, 
+	vk->createImage(extent.width, extent.height, 1, m_msaaSamples, colorFormat, VK_IMAGE_TILING_OPTIMAL, 
 		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 0, m_colorImage, m_colorImageMemory);
 	m_colorImageView = vk->createImageView(m_colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_IMAGE_VIEW_TYPE_2D);
 
@@ -477,68 +486,73 @@ void RenderPass::fillCommandBuffer(Vulkan * vk)
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = m_commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = 1;
+	allocInfo.commandBufferCount = (uint32_t)m_commandBuffer.size();
 
-	if (vkAllocateCommandBuffers(vk->GetDevice(), &allocInfo, &m_commandBuffer) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(vk->getDevice(), &allocInfo, m_commandBuffer.data()) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : allocation des command buffers");
 
-
-	VkCommandBufferBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-
-	vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
-
-	VkRenderPassBeginInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = m_renderPass;
-	renderPassInfo.framebuffer = m_frameBuffer.framebuffer;
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = m_extent;
-
-	std::array<VkClearValue, 2> clearValues = {};
-	clearValues[0].color = { 0.0f, 0.0f, 1.0f, 1.0f };
-	clearValues[1].depthStencil = { 1.0f };
-
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-
-	vkCmdBeginRenderPass(m_commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	for (int j = 0; j < m_meshesPipeline.size(); ++j)
+	for (int i(0); i < m_frameBuffers.size(); ++i)
 	{
-		for (int k(0); k < m_meshesPipeline[j].vertexBuffer.size(); ++k)
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+		vkBeginCommandBuffer(m_commandBuffer[i], &beginInfo);
+
+		VkRenderPassBeginInfo renderPassInfo = {};
+		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassInfo.renderPass = m_renderPass;
+		renderPassInfo.framebuffer = m_frameBuffers[i].framebuffer;
+		renderPassInfo.renderArea.offset = { 0, 0 };
+		renderPassInfo.renderArea.extent = m_extent;
+
+		std::array<VkClearValue, 2> clearValues = {};
+		clearValues[0].color = { 0.0f, 0.0f, 1.0f, 1.0f };
+		clearValues[1].depthStencil = { 1.0f };
+
+		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderPassInfo.pClearValues = clearValues.data();
+
+		vkCmdBeginRenderPass(m_commandBuffer[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		for (int j = 0; j < m_meshesPipeline.size(); ++j)
 		{
-			vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_meshesPipeline[j].pipeline);
+			if (m_meshesPipeline[j].frameBufferID != i)
+				continue;
 
-			VkBuffer vertexBuffers[] = { m_meshesPipeline[j].vertexBuffer[k] };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(m_commandBuffer, 0, 1, vertexBuffers, offsets);
+			for (int k(0); k < m_meshesPipeline[j].vertexBuffer.size(); ++k)
+			{
+				vkCmdBindPipeline(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_meshesPipeline[j].pipeline);
 
-			vkCmdBindIndexBuffer(m_commandBuffer, m_meshesPipeline[j].indexBuffer[k], 0, VK_INDEX_TYPE_UINT32);
+				VkBuffer vertexBuffers[] = { m_meshesPipeline[j].vertexBuffer[k] };
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(m_commandBuffer[i], 0, 1, vertexBuffers, offsets);
 
-			vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				m_meshesPipeline[j].pipelineLayout, 0, 1, &m_meshesPipeline[j].descriptorSet[k], 0, nullptr);
+				vkCmdBindIndexBuffer(m_commandBuffer[i], m_meshesPipeline[j].indexBuffer[k], 0, VK_INDEX_TYPE_UINT32);
 
-			vkCmdDrawIndexed(m_commandBuffer, m_meshesPipeline[j].nbIndices[k], 1, 0, 0, 0);
+				vkCmdBindDescriptorSets(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS,
+					m_meshesPipeline[j].pipelineLayout, 0, 1, &m_meshesPipeline[j].descriptorSet[k], 0, nullptr);
+
+				vkCmdDrawIndexed(m_commandBuffer[i], m_meshesPipeline[j].nbIndices[k], 1, 0, 0, 0);
+			}
 		}
+
+		vkCmdEndRenderPass(m_commandBuffer[i]);
+
+		if (vkEndCommandBuffer(m_commandBuffer[i]) != VK_SUCCESS)
+			throw std::runtime_error("Erreur : record command buffer");
 	}
-
-	vkCmdEndRenderPass(m_commandBuffer);
-
-	if (vkEndCommandBuffer(m_commandBuffer) != VK_SUCCESS)
-		throw std::runtime_error("Erreur : record command buffer");
 }
 
 void RenderPass::drawFrame(Vulkan * vk)
 {
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	VkSemaphore renderFinishedSemaphore[] = { vk->GetRenderFinishedSemaphore() };
+	VkSemaphore renderFinishedSemaphore[] = { vk->getRenderFinishedSemaphore() };
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &m_renderCompleteSemaphore; // renderPass
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_commandBuffer;
+	submitInfo.commandBufferCount = m_commandBuffer.size();
+	submitInfo.pCommandBuffers = m_commandBuffer.data();
 
 	if (m_firstDraw)
 	{
@@ -548,6 +562,6 @@ void RenderPass::drawFrame(Vulkan * vk)
 		m_firstDraw = false;
 	}
 
-	if (vkQueueSubmit(vk->GetGraphicalQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	if (vkQueueSubmit(vk->getGraphicalQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 		throw std::runtime_error("Erreur : draw command");
 }

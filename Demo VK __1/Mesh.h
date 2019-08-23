@@ -16,7 +16,8 @@ class MeshPBR : public MeshBase
 public:
 	void loadObj(Vulkan * vk, std::string path, glm::vec3 forceNormal = glm::vec3(-1.0f));
 	void loadTexture(Vulkan * vk, std::vector<std::string> path);
-	void loadCubemap(Vulkan* vk, std::vector < std::string > path);
+	void loadCubemapFromFile(Vulkan* vk, std::vector < std::string > path);
+	void loadCubemapFromImages(Vulkan* vk, std::array<VkImage, 6> images, uint32_t height, uint32_t width);
 	void loadHDRTexture(Vulkan* vk, std::vector < std::string > path);
 
 	void restoreTransformations() { m_modelMatrix = glm::mat4(1.0); }
