@@ -57,8 +57,15 @@ void System::cleanup()
 {
 	std::cout << "Cleanup..." << std::endl;
 
-	m_vk.cleanup();
+	for (int i(0); i < m_spherelightMeshes.size(); ++i)
+		m_spherelightMeshes[i].cleanup(m_vk.getDevice());
+
+	m_skybox.cleanup(m_vk.getDevice());
+	m_sphere.cleanup(m_vk.getDevice());
+
 	m_swapChainRenderPass.cleanup(&m_vk);
+
+	m_vk.cleanup();
 }
 
 void System::create(bool recreate)
@@ -80,7 +87,7 @@ void System::createRessources()
 	m_fpsCounterTextID = m_text.addText(&m_vk, L"FPS : 0", glm::vec2(-0.99f, 0.85f), 0.065f);
 
 	m_sphere.loadObj(&m_vk, "Models/sphere.obj");
-	//m_meshes[0]->loadTexture(&m_vk, { "Textures/bamboo-wood-semigloss-albedo.png", "Textures/bamboo-wood-semigloss-normal.png",  "Textures/bamboo-wood-semigloss-roughness.png",
+	//m_meshes[0]->loadTextureFromFile(&m_vk, { "Textures/bamboo-wood-semigloss-albedo.png", "Textures/bamboo-wood-semigloss-normal.png",  "Textures/bamboo-wood-semigloss-roughness.png",
 	//	"Textures/bamboo-wood-semigloss-metal.png", "Textures/bamboo-wood-semigloss-ao.png" });
 
 	m_skybox.loadObj(&m_vk, "Models/cube.obj");
@@ -89,7 +96,8 @@ void System::createRessources()
 	//m_meshes[1]->loadHDRTexture(&m_vk, { "Textures/simons_town_rocks_4k.hdr" });
 
 	RenderPass tempCubemapCreation;
-	tempCubemapCreation.initialize(&m_vk, true, { 2048, 2048 }, false, VK_SAMPLE_COUNT_8_BIT, 6);
+#define CUBEMAP_SIZE_X 1024
+	tempCubemapCreation.initialize(&m_vk, true, { CUBEMAP_SIZE_X, CUBEMAP_SIZE_X }, false, VK_SAMPLE_COUNT_8_BIT, 6);
 
 	MeshPBR tempCube;
 	tempCube.loadObj(&m_vk, "Models/cube.obj");
@@ -113,7 +121,7 @@ void System::createRessources()
 		
 		tempUboVP[i].load(&m_vk, tempUboVPData, VK_SHADER_STAGE_VERTEX_BIT);
 
-		tempCubemapCreation.addMesh(&m_vk, { { &tempCube, { &tempUboVP[i] } } }, "Shaders/vert.spv", "Shaders/frag.spv", 1, i);
+		tempCubemapCreation.addMesh(&m_vk, { { &tempCube, { &tempUboVP[i] } } }, "Shaders/vertCubemapCreation.spv", "Shaders/fragCubemapCreation.spv", 1, i);
 	}
 
 	tempCubemapCreation.recordDraw(&m_vk);
@@ -122,7 +130,75 @@ void System::createRessources()
 	vkQueueWaitIdle(m_vk.getGraphicalQueue());
 
 	m_skybox.loadCubemapFromImages(&m_vk, { tempCubemapCreation.getFrameBuffer(0).image, tempCubemapCreation.getFrameBuffer(1).image, tempCubemapCreation.getFrameBuffer(2).image,
-		tempCubemapCreation.getFrameBuffer(3).image , tempCubemapCreation.getFrameBuffer(4).image , tempCubemapCreation.getFrameBuffer(5).image }, 2048, 2048);
+		tempCubemapCreation.getFrameBuffer(3).image , tempCubemapCreation.getFrameBuffer(4).image , tempCubemapCreation.getFrameBuffer(5).image }, CUBEMAP_SIZE_X, CUBEMAP_SIZE_X);
+	tempCubemapCreation.cleanup(&m_vk);
+	tempCube.cleanup(m_vk.getDevice());
+
+	RenderPass tempConvolutionCreation;
+	tempConvolutionCreation.initialize(&m_vk, true, { 32, 32 }, false, VK_SAMPLE_COUNT_8_BIT, 6);
+	for (int i(0); i < 6; ++i)
+	{
+		tempConvolutionCreation.addMesh(&m_vk, { { &m_skybox, { &tempUboVP[i] } } }, "Shaders/vertConvolution.spv", "Shaders/fragConvolution.spv", 1, i);
+	}
+	tempConvolutionCreation.recordDraw(&m_vk);
+	tempConvolutionCreation.drawCall(&m_vk);
+
+	vkQueueWaitIdle(m_vk.getGraphicalQueue());
+
+	m_sphere.loadCubemapFromImages(&m_vk, { tempConvolutionCreation.getFrameBuffer(0).image, tempConvolutionCreation.getFrameBuffer(1).image, tempConvolutionCreation.getFrameBuffer(2).image,
+		tempConvolutionCreation.getFrameBuffer(3).image , tempConvolutionCreation.getFrameBuffer(4).image , tempConvolutionCreation.getFrameBuffer(5).image }, 32, 32);
+	tempConvolutionCreation.cleanup(&m_vk);
+
+#define MAX_REFLECTION_TEXTURE_SIZE_X 256
+	UniformBufferObject<UniformBufferSingleFloat> uboRoughness;
+	UniformBufferSingleFloat uboRoughnessData;
+	uboRoughnessData.floatVal = 0.0f;
+	uboRoughness.load(&m_vk, uboRoughnessData, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+	//int texID = m_sphere.createTexture(&m_vk, MAX_REFLECTION_TEXTURE_SIZE_X, MAX_REFLECTION_TEXTURE_SIZE_X, 5, 6);
+	//for (int mipLevel = 0; mipLevel < 5; ++mipLevel)
+	//{
+	int mipLevel = 0;
+
+	RenderPass tempReflectionConvolutionCreation;
+	VkExtent2D extent = { MAX_REFLECTION_TEXTURE_SIZE_X * std::pow(0.5, mipLevel), MAX_REFLECTION_TEXTURE_SIZE_X * std::pow(0.5, mipLevel) };
+	tempReflectionConvolutionCreation.initialize(&m_vk, true, extent, false, VK_SAMPLE_COUNT_8_BIT, 6);
+	uboRoughnessData.floatVal = (float)mipLevel / 4.0f;
+	uboRoughness.update(&m_vk, uboRoughnessData);
+	for (int face(0); face < 6; ++face)
+	{
+		tempReflectionConvolutionCreation.addMesh(&m_vk, { { &m_skybox, { &tempUboVP[face], &uboRoughness } } }, "Shaders/vert.spv", "Shaders/frag.spv", 1, face);
+	}
+	tempReflectionConvolutionCreation.recordDraw(&m_vk);
+	tempReflectionConvolutionCreation.drawCall(&m_vk);
+
+	vkQueueWaitIdle(m_vk.getGraphicalQueue());
+	m_sphere.loadCubemapFromImages(&m_vk, { tempReflectionConvolutionCreation.getFrameBuffer(0).image, tempReflectionConvolutionCreation.getFrameBuffer(1).image,
+		tempReflectionConvolutionCreation.getFrameBuffer(2).image,	tempReflectionConvolutionCreation.getFrameBuffer(3).image , tempReflectionConvolutionCreation.getFrameBuffer(4).image ,
+		tempReflectionConvolutionCreation.getFrameBuffer(5).image }, extent.height, extent.width/*, texID, mipLevel*/);
+
+	tempReflectionConvolutionCreation.cleanup(&m_vk);
+	//}
+
+	RenderPass tempBrdfLUTCreation;
+#define BRDF_LUT_TEXTURE_SIZE_X 512
+	tempBrdfLUTCreation.initialize(&m_vk, true, { BRDF_LUT_TEXTURE_SIZE_X, BRDF_LUT_TEXTURE_SIZE_X }, false, VK_SAMPLE_COUNT_8_BIT, 1);
+
+	MeshPBR square;
+	square.loadObj(&m_vk, "Models/square.obj", glm::vec3(0.0f, 0.0f, 1.0f));
+
+	tempBrdfLUTCreation.addMesh(&m_vk, { {&square, { } } }, "Shaders/vertBrdfLUT.spv", "Shaders/fragbrdfLUT.spv", 0);
+	tempBrdfLUTCreation.recordDraw(&m_vk);
+	tempBrdfLUTCreation.drawCall(&m_vk);
+
+	vkQueueWaitIdle(m_vk.getGraphicalQueue());
+
+	m_sphere.loadTextureFromImages(&m_vk, { tempBrdfLUTCreation.getFrameBuffer(0).image }, BRDF_LUT_TEXTURE_SIZE_X, BRDF_LUT_TEXTURE_SIZE_X);
+
+	tempBrdfLUTCreation.cleanup(&m_vk);
+	square.cleanup(m_vk.getDevice());
+
+	//m_skybox.setImageView(0, m_sphere.getImageView(1));
 }
 
 void System::createPasses(bool recreate)
@@ -193,7 +269,7 @@ void System::createPasses(bool recreate)
 	}
 	m_sphereInstance.load(&m_vk, sizeof(perInstance[0]) * perInstance.size(), perInstance.data());
 
-	m_swapChainRenderPass.addMeshInstanced(&m_vk, { { &m_sphere, { &m_uboVP, &m_uboLight }, &m_sphereInstance } }, "Shaders/vertPBR.spv", "Shaders/fragPBR.spv", 0);
+	m_swapChainRenderPass.addMeshInstanced(&m_vk, { { &m_sphere, { &m_uboVP, &m_uboLight }, &m_sphereInstance } }, "Shaders/vertPBR.spv", "Shaders/fragPBR.spv", 3);
 	m_swapChainRenderPass.addMesh(&m_vk, spheres, "Shaders/vertSphere.spv", "Shaders/fragSphere.spv", 0);
 	m_skyboxID = m_swapChainRenderPass.addMesh(&m_vk, { { &m_skybox, { &m_uboVPSkybox } } }, "Shaders/vertSkybox.spv", "Shaders/fragSkybox.spv", 1);
 	m_swapChainRenderPass.recordDraw(&m_vk);

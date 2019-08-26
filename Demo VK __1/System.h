@@ -39,7 +39,6 @@ private:
 	MeshPBR m_skybox;
 	MeshPBR m_sphere;
 	Instance m_sphereInstance;
-	std::vector<MeshPBR> m_sphereMeshes;
 	std::vector<MeshPBR> m_spherelightMeshes;
 	Text m_text;
 

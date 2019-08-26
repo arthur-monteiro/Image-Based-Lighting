@@ -774,7 +774,7 @@ void Vulkan::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, u
 	endSingleTimeCommands(commandBuffer);
 }
 
-void Vulkan::copyImage(VkImage source, VkImage dst, uint32_t width, uint32_t height, uint32_t baseArrayLayer)
+void Vulkan::copyImage(VkImage source, VkImage dst, uint32_t width, uint32_t height, uint32_t baseArrayLayer, uint32_t mipLevel)
 {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -788,7 +788,7 @@ void Vulkan::copyImage(VkImage source, VkImage dst, uint32_t width, uint32_t hei
 
 	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	copyRegion.dstSubresource.baseArrayLayer = baseArrayLayer;
-	copyRegion.dstSubresource.mipLevel = 0;
+	copyRegion.dstSubresource.mipLevel = mipLevel;
 	copyRegion.dstSubresource.layerCount = 1;
 	copyRegion.dstOffset = { 0, 0, 0 };
 

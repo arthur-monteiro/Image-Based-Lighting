@@ -9,6 +9,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
 
+struct UniformBufferSingleFloat
+{
+	float floatVal;
+};
+
 struct UniformBufferObjectVP
 {
 	glm::mat4 view;

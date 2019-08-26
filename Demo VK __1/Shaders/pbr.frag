@@ -14,6 +14,10 @@ layout(binding = 1) uniform UniformBufferObjectLights
 	int nbDirLights;
 } uboLights;
 
+layout(binding = 2) uniform samplerCube irradianceMap;
+layout(binding = 3) uniform samplerCube prefilterMap;
+layout(binding = 4) uniform sampler2D brdfLUT;
+
 layout(location = 0) in vec3 worldPos;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 normal;
@@ -38,6 +42,7 @@ void main()
 
 	vec3 N = normalize(normal); 
     vec3 V = normalize(uboLights.camPos.xyz - worldPos);
+	vec3 R = reflect(-V, N);  
 
 	vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
@@ -70,8 +75,21 @@ void main()
 		float NdotL = max(dot(N, L), 0.0);                
 		Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
 	}
+	vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
 	
-	vec3 ambient = vec3(0.03) * albedo * ao;
+	vec3 kS = F;
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - metallic;	  
+    vec3 irradiance = texture(irradianceMap, N).rgb;
+    vec3 diffuse      = irradiance * albedo;
+
+	const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefilteredColor = textureLod(prefilterMap, R,  roughness * MAX_REFLECTION_LOD).rgb;    
+    vec2 brdf  = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specular = prefilteredColor * (F * brdf.x + brdf.y);
+
+	vec3 ambient = (kD * diffuse + specular) * ao;
+
     vec3 color = ambient + Lo;
 	
     color = color / (color + vec3(1.0));

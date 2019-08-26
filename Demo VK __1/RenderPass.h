@@ -20,6 +20,8 @@ struct MeshRender
 class RenderPass
 {
 public:
+	~RenderPass();
+
 	void initialize(Vulkan* vk, bool createFrameBuffer = false, VkExtent2D extent = { 0, 0 }, bool present = true, VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT, int nbFramebuffer = 1);
 
 	int addMesh(Vulkan * vk, std::vector<MeshRender> mesh, std::string vertPath, std::string fragPath, int nbTexture, int frameBufferID = 0);
@@ -43,10 +45,12 @@ private:
 	void drawFrame(Vulkan * vk);
 
 public:
-	VkRenderPass GetRenderPass() { return m_renderPass; }
+	VkRenderPass getRenderPass() { return m_renderPass; }
 	FrameBuffer getFrameBuffer(int index) { return m_frameBuffers[index]; }
 
 private:
+	bool m_isDestroyed = false;
+
 	VkFormat m_format;
 	VkFormat m_depthFormat;
 

@@ -1,5 +1,11 @@
 #include "RenderPass.h"
 
+RenderPass::~RenderPass()
+{
+	if (!m_isDestroyed)
+		std::cout << "Render pass not destroyed !" << std::endl;
+}
+
 void RenderPass::initialize(Vulkan* vk, bool createFrameBuffer, VkExtent2D extent, bool present, VkSampleCountFlagBits msaaSamples, int nbFramebuffer)
 {
 	m_text = nullptr;
@@ -267,11 +273,17 @@ void RenderPass::cleanup(Vulkan * vk)
 	for (int i(0); i < m_meshesPipeline.size(); ++i)
 		m_meshesPipeline[i].free(vk->getDevice(), m_descriptorPool, true); // ne détruit pas les ressources
 
+	for (int i(0); i < m_frameBuffers.size(); ++i)
+		m_frameBuffers[i].free(vk->getDevice());
+
 	m_meshes.clear();
 
 	m_meshesPipeline.clear();
 
+	vkDestroyDescriptorPool(vk->getDevice(), m_descriptorPool, nullptr);
 	vkDestroyRenderPass(vk->getDevice(), m_renderPass, nullptr);
+
+	m_isDestroyed = true;
 }
 
 void RenderPass::createRenderPass(VkDevice device, VkImageLayout finalLayout)

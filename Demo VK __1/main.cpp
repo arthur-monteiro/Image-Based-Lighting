@@ -4,19 +4,21 @@
 
 int main()
 {
-	System s;
+	{
+		System s;
 
-	try
-	{
-		s.initialize();
-		s.mainLoop();
-		s.cleanup();
-	}
-	catch (const std::runtime_error& e)
-	{
-		std::cerr << e.what() << std::endl;
-		system("PAUSE");
-		return EXIT_FAILURE;
+		try
+		{
+			s.initialize();
+			s.mainLoop();
+			s.cleanup();
+		}
+		catch (const std::runtime_error& e)
+		{
+			std::cerr << e.what() << std::endl;
+			system("PAUSE");
+			return EXIT_FAILURE;
+		}
 	}
 
 #ifdef _WIN32

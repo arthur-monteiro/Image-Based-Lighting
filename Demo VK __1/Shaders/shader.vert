@@ -12,7 +12,7 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inTangent;
 layout(location = 3) in vec2 inTexCoord;
 
-layout(location = 0) out vec3 texCoords;
+layout(location = 0) out vec3 localPos;
 
 out gl_PerVertex
 {
@@ -24,5 +24,5 @@ void main()
     vec4 pos = ubo.proj * ubo.view * vec4(inPosition, 1.0);
     gl_Position = vec4(pos.xy, pos.w, pos.w);
 
-    texCoords = inPosition;
+    localPos = inPosition;
 }  
