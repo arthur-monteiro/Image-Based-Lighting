@@ -205,10 +205,7 @@ void System::createPasses(bool recreate)
 {
 	if(recreate) m_swapChainRenderPass.cleanup(&m_vk);
 	m_swapChainRenderPass.initialize(&m_vk, false, { 0, 0 }, true, VK_SAMPLE_COUNT_8_BIT);
-
-	// on envoi le pointeur pour modifier la matrice model où on veut
-	m_swapChainRenderPass.addText(&m_vk, &m_text);
-
+	
 	std::vector<std::pair<glm::vec3, glm::vec3>> pointLights;
 	pointLights.push_back({ glm::vec3(-1.f, 0.0f, -10.f), glm::vec3(100.0f) }); // pos , color
 	pointLights.push_back({ glm::vec3(-5.0f, 1.0f, -10.f), glm::vec3(100.0f) });
@@ -272,5 +269,6 @@ void System::createPasses(bool recreate)
 	m_swapChainRenderPass.addMeshInstanced(&m_vk, { { &m_sphere, { &m_uboVP, &m_uboLight }, &m_sphereInstance } }, "Shaders/vertPBR.spv", "Shaders/fragPBR.spv", 3);
 	m_swapChainRenderPass.addMesh(&m_vk, spheres, "Shaders/vertSphere.spv", "Shaders/fragSphere.spv", 0);
 	m_skyboxID = m_swapChainRenderPass.addMesh(&m_vk, { { &m_skybox, { &m_uboVPSkybox } } }, "Shaders/vertSkybox.spv", "Shaders/fragSkybox.spv", 1);
+	m_swapChainRenderPass.addText(&m_vk, &m_text);
 	m_swapChainRenderPass.recordDraw(&m_vk);
 }
